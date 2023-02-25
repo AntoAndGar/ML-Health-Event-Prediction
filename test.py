@@ -262,12 +262,12 @@ print(
             ].unique()
         ]
     ),
-)
+)  # 526
 
 # in anagrafica abbiamo solo pazienti con diagnosi di diabete di tipo 2 valore 5 in 'tipodiabete'
 # quindi possiamo fillare l'annodiagnosidiabete con l'annoprimoaccesso
 print(
-    "numero pazienti con anno diagnosi diabete a N/A ma con anno primo accesso presente: ",
+    "numero righe con anno diagnosi diabete a N/A ma con anno primo accesso presente: ",
     sum(
         [
             1
@@ -314,7 +314,7 @@ print(
             ]["key"].unique()
         ]
     )
-)
+)  # 27592
 
 aa_prob_cuore.loc[
     aa_prob_cuore["annodiagnosidiabete"].isna()
@@ -324,7 +324,7 @@ aa_prob_cuore.loc[
 
 print("All filtered :")
 aa_prob_cuore.dropna(subset="annodiagnosidiabete", inplace=True)
-print(sum([1 for elem in aa_prob_cuore["key"].unique()]))
+print(sum([1 for elem in aa_prob_cuore["key"].unique()]))  # 49829
 
 # df_esami_par = pd.read_csv('sample/esamilaboratorioparametri.csv')
 # df_esami_par_cal = pd.read_csv('sample/esamilaboratorioparametricalcolati.csv')
@@ -336,11 +336,10 @@ wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH
 aa_cuore_key = aa_prob_cuore[["idana", "idcentro"]]
 aa_cuore_key = aa_cuore_key.drop_duplicates()
 
-df_esami_stru = df_esami_stru.groupby(["idana", "idcentro"]).agg(
+df_esami_stru = df_esami_stru.groupby(["idana", "idcentro"], as_index=False).agg(
     {"data": ["min", "max"]}
 )
-
-print(df_esami_stru.head())
+df_esami_stru.head()
 ### RIMUOVI I PAZIENTI CON TUTTI GLI EVENTI NELLO STESSO MESE
 df_esami_stru["data_min"] = pd.to_datetime(
     df_esami_stru["data"]["min"], format="%Y-%m-%d"
@@ -348,14 +347,123 @@ df_esami_stru["data_min"] = pd.to_datetime(
 df_esami_stru["data_max"] = pd.to_datetime(
     df_esami_stru["data"]["max"], format="%Y-%m-%d"
 )
-print(df_esami_stru.info())
-df_esami_stru["diff"] = df_esami_stru["data_max"] - df_esami_stru["data_min"]
-df_esami_stru = df_esami_stru[df_esami_stru["diff"] > pd.Timedelta("30 days")]
-print(df_esami_stru.head())
 
-### TODO togliere dal dataframe principale ciò che non è in df_esami_stru
-### TODO: Punto 5
+df_esami_stru.info()
+df_esami_stru["diff"] = df_esami_stru["data_max"] - df_esami_stru["data_min"]
+print(len(df_esami_stru))
+print(len(df_esami_stru[df_esami_stru["diff"] < pd.Timedelta("30 days")]))
+print(len(df_esami_stru[df_esami_stru["diff"] == pd.Timedelta("0 days")]))
+
+df_esami_stru = df_esami_stru[df_esami_stru["diff"] > pd.Timedelta("30 days")]
+df_esami_stru = df_esami_stru.sort_values(by=["diff"])
+print(df_esami_stru.head())
+print(df_esami_stru.tail())
+
+
+###togliere dal dataframe principale ciò che non è in df_esami_stru
+df_esami_stru_key = df_esami_stru[["idana", "idcentro"]].drop_duplicates()
+aa_prob_cuore_filtered = pd.merge(
+    aa_prob_cuore,
+    df_esami_stru_key,
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print(aa_prob_cuore_filtered)
+print(len(aa_prob_cuore_filtered))
+print(len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()))
+# int_df = pd.merge(d1, d2, how ='inner', on =['A', 'B'])
+
 
 ### TODO: Punto 4
+df_esami_lab_par = pd.read_csv("sample/esamilaboratorioparametri.csv")
+
+print("prima update: ")
+amd004 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
+print("numero AMD004 minori di 40: ", len(amd004[amd004.astype(float) < 40]))
+print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200]))
+
+
+df_esami_lab_par["valore"].update(
+    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
+)
+df_esami_lab_par["valore"].update(
+    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
+)
+df_esami_lab_par["valore"].update(
+    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
+)
+df_esami_lab_par["valore"].update(
+    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
+)
+
+print("dopo update: ")
+amd004_dopo = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
+
+print("numero AMD004 minori di 40: ", len(amd004_dopo[amd004_dopo < 40]))
+print(
+    "numero AMD004 maggiori di 200: ", len(amd004_dopo[amd004_dopo.astype(float) > 200])
+)
+
+df_esami_lab_par_calcolati = pd.read_csv(
+    "sample/esamilaboratorioparametricalcolati.csv"
+)
+
+print("prima update: ")
+
+stitch002 = df_esami_lab_par_calcolati[
+    df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+]["valore"]
+print("numero STITCH001 minori di 30: ", len(stitch002[stitch002.astype(float) < 30]))
+print(
+    "numero STITCH001 maggiori di 300: ", len(stitch002[stitch002.astype(float) > 300])
+)
+
+df_esami_lab_par_calcolati["valore"].update(
+    df_esami_lab_par_calcolati[
+        df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+    ]["valore"].clip(30, 300)
+)
+df_esami_lab_par_calcolati["valore"].update(
+    df_esami_lab_par_calcolati[
+        df_esami_lab_par_calcolati["codicestitch"] == "STITCH003"
+    ]["valore"].clip(60, 330)
+)
+
+stitch002_dopo = df_esami_lab_par_calcolati[
+    df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+]["valore"]
+
+
+print(
+    "numero STITCH001 minori di 30: ",
+    len(stitch002_dopo[stitch002_dopo < 30]),
+)
+print(
+    "numero STITCH001 maggiori di 300: ",
+    len(stitch002_dopo[stitch002_dopo.astype(float) > 300]),
+)
+
+
+### TODO: Punto 5
+
+# questa roba che ho scritto non sembra funzionare come mi aspetterei
+# print(
+#     sum(
+#         [
+#             1
+#             for elem in aa_prob_cuore_filtered[["idana", "idcentro"]]
+#             .groupby(["idana", "idcentro"], group_keys=True)
+#             .count()
+#             < 2
+#         ]
+#     )
+# )
+
+# print(
+#     aa_prob_cuore_filtered[["idana", "idcentro"]]
+#     .groupby(["idana", "idcentro"], group_keys=True)
+#     .count()
+# )
+
 
 ### TODO: Punto 6
