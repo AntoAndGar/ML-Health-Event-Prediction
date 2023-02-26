@@ -351,6 +351,11 @@ print("loaded prescrizioni non diabete")
 ## Calcola le chiavi dei pazienti di interesse
 aa_cuore_key = aa_prob_cuore[["idana", "idcentro", "annonascita","annoprimoaccesso","annodecesso"]]
 aa_cuore_key = aa_cuore_key.drop_duplicates()
+aa_cuore_key["key"] = str(aa_cuore_key["idana"]) + " -- " + str(aa_cuore_key["idcentro"])
+print("chiavi pazienti di interesse")
+print(aa_cuore_key.head(30))
+print(aa_cuore_key["key"].unique())
+input(aa_cuore_key["key"].unique().shape)
 
 ## Cast string to datatime
 aa_cuore_key.rename(columns={"annonascita": "appo"}, inplace=True)
