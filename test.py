@@ -555,24 +555,46 @@ print(
 )
 
 ### TODO: Punto 5
-# questa roba che ho scritto non sembra funzionare come mi aspetterei
-# print(
-#     sum(
-#         [
-#             1
-#             for elem in aa_prob_cuore_filtered[["idana", "idcentro"]]
-#             .groupby(["idana", "idcentro"], group_keys=True)
-#             .count()
-#             < 2
-#         ]
-#     )
-# )
 
-# print(
-#     aa_prob_cuore_filtered[["idana", "idcentro"]]
-#     .groupby(["idana", "idcentro"], group_keys=True)
-#     .count()
-# )
+cont = (
+    aa_prob_cuore_filtered[["idana", "idcentro"]]
+    .groupby(["idana", "idcentro"])
+    .size()
+    .reset_index(name="count")
+)
 
+cont_filtered = cont[cont["count"] >= 2]
 
+select = aa_prob_cuore_filtered.merge(
+    cont_filtered, on=["idana", "idcentro"], how="inner"
+)
+
+print(select)
+
+select["data"] = pd.to_datetime(select["data"], format="%Y-%m-%d")
+
+last_event = select.groupby(["idana", "idcentro"], group_keys=True)["data"].max()
+
+print(last_event)
+
+df_problemi_cuore["data"] = pd.to_datetime(df_problemi_cuore["data"], format="%Y-%m-%d")
+
+last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)[
+    "data"
+].max()
+
+print(last_problem)
+
+wanted_patient = aa_prob_cuore_filtered.join(
+    (
+        last_problem.reset_index(drop=True).ge(
+            pd.to_datetime(
+                last_event.reset_index(drop=True) - pd.Timedelta("180 days"),
+                format="%Y-%m-%d",
+            )
+        )
+    ).rename("label")
+)
+
+print(wanted_patient)
 ### TODO: Punto 6
