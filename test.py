@@ -351,11 +351,7 @@ print("loaded prescrizioni non diabete")
 ## Calcola le chiavi dei pazienti di interesse
 aa_cuore_key = aa_prob_cuore[["idana", "idcentro", "annonascita","annoprimoaccesso","annodecesso"]]
 aa_cuore_key = aa_cuore_key.drop_duplicates()
-aa_cuore_key["key"] = str(aa_cuore_key["idana"]) + " -- " + str(aa_cuore_key["idcentro"])
-print("chiavi pazienti di interesse")
-print(aa_cuore_key.head(30))
-print(aa_cuore_key["key"].unique())
-input(aa_cuore_key["key"].unique().shape)
+input(len(aa_cuore_key))
 
 ## Cast string to datatime
 aa_cuore_key.rename(columns={"annonascita": "appo"}, inplace=True)
@@ -374,6 +370,8 @@ aa_cuore_key["annodecesso"] = pd.to_datetime(
 )
 aa_cuore_key.drop(columns=["appo"], inplace=True)
 print(aa_cuore_key.head())
+
+input(len(aa_cuore_key))
 
 df_esami_par.rename(columns={"data": "appo"}, inplace=True)
 df_esami_par["data"] = pd.to_datetime(
@@ -467,13 +465,13 @@ df_prescirizioni_non_diabete = pd.concat([appo_1, appo_2])
 print("Pulite le date")
 ### TODO Punto 3
 ## Append datasets
-df_diagnosi_and_esami = pd.concat([df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru], ignore_index=False)
+df_diagnosi_and_esami = pd.concat([df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru], ignore_index=True)
 print("lunghezza df_diagnosi_and_esami: ")
-input(len(df_diagnosi_and_esami))
-input(df_diagnosi_and_esami.head())
-df_diagnosi_and_esami["key"]= df_diagnosi_and_esami["idana"].astype(str) + " GANG " + df_diagnosi_and_esami["idcentro"].astype(str)
+df_diagnosi_and_esami_keys = df_diagnosi_and_esami[["idana", "idcentro"]]
+input(len(df_diagnosi_and_esami_keys))
+df_diagnosi_and_esami_keys.drop_duplicates()  
+input(len(df_diagnosi_and_esami_keys))
 print("sto testando qui")
-input(len(df_diagnosi_and_esami["key"].unique()))
 groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg({"data": ["min", "max"]})
 print(groups_diagnosi_and_esami.head())
 '''
