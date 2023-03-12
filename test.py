@@ -368,12 +368,10 @@ aa_cuore_key.rename(columns={"annodecesso": "appo"}, inplace=True)
 aa_cuore_key["annodecesso"] = pd.to_datetime(
     aa_cuore_key["appo"], format="%Y"
 )
-print("ORA SONO QUIIII")
-input(aa_cuore_key.annodecesso.unique())
+
 aa_cuore_key.drop(columns=["appo"], inplace=True)
 print(aa_cuore_key.head())
 
-input(len(aa_cuore_key))
 
 df_esami_par.rename(columns={"data": "appo"}, inplace=True)
 df_esami_par["data"] = pd.to_datetime(
@@ -471,12 +469,9 @@ print("Pulite le date")
 df_diagnosi_and_esami = pd.concat([df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru], ignore_index=True)
 print("lunghezza df_diagnosi_and_esami: ")
 df_diagnosi_and_esami_keys = df_diagnosi_and_esami[["idana", "idcentro"]]
-input(len(df_diagnosi_and_esami_keys))
 df_diagnosi_and_esami_keys = df_diagnosi_and_esami_keys.drop_duplicates()  
-input(len(df_diagnosi_and_esami_keys))
-print("sto testando qui")
+
 groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg({"data": ["min", "max"]})
-print(groups_diagnosi_and_esami.head())
 '''
 groups_diagnosi_and_esami["data_min"] = pd.to_datetime(
     groups_diagnosi_and_esami["data"]["min"], format="%Y-%m-%d"
@@ -500,8 +495,6 @@ groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
 '''
 groups_diagnosi_and_esami["diff"] = groups_diagnosi_and_esami["data_max"] - groups_diagnosi_and_esami["data_min"]
 print(groups_diagnosi_and_esami.head(30))
-print("oh cacchio")
-input(len(groups_diagnosi_and_esami))
 print(len(groups_diagnosi_and_esami[groups_diagnosi_and_esami["diff"] == pd.Timedelta("0 days")]))
 print(len(groups_diagnosi_and_esami[groups_diagnosi_and_esami["diff"] < pd.Timedelta("30 days")]))
 
