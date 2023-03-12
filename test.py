@@ -581,8 +581,36 @@ print(
 
 ### TODO: Punto 5
 
+aa_prob_cuore_filtered = pd.merge(
+    aa_prob_cuore,
+    df_diagnosi_and_esami[["idana", "idcentro"]],
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print(len(df_prescrizioni_diabete_farmaci))
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
+    df_diagnosi_and_esami[["idana", "idcentro"]], 
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print("checkiamo")
+input(print(len(df_prescrizioni_diabete_farmaci)))
+df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
+    df_diagnosi_and_esami[["idana", "idcentro"]], 
+    on=["idana", "idcentro"],
+    how="inner",
+)
+
+df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci.merge(
+    df_diagnosi_and_esami[["idana", "idcentro"]],
+    on=["idana", "idcentro"],
+    how="inner",
+)
+
+
+df_diagnosi_and_esami_and_prescrioni = pd.concat(df_diagnosi_and_esami, df_prescrizioni_diabete_farmaci, df_prescirizioni_non_diabete, df_prescrizioni_diabete_non_farmiaci)
 cont = (
-    aa_prob_cuore_filtered[["idana", "idcentro"]]
+    df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
     .groupby(["idana", "idcentro"])
     .size()
     .reset_index(name="count")
@@ -590,18 +618,22 @@ cont = (
 
 cont_filtered = cont[cont["count"] >= 2]
 
-select = aa_prob_cuore_filtered.merge(
+select = df_diagnosi_and_esami_and_prescrioni.merge(
     cont_filtered, on=["idana", "idcentro"], how="inner"
 )
 
 print(select)
 
-select["data"] = pd.to_datetime(select["data"], format="%Y-%m-%d")
+#select["data"] = pd.to_datetime(select["data"], format="%Y-%m-%d")
 
 last_event = select.groupby(["idana", "idcentro"], group_keys=True)["data"].max()
 
 print(last_event)
-
+df_problemi_cuore = df_problemi_cuore.merge(
+    df_diagnosi_and_esami[["idana", "idcentro"]],
+    on=["idana", "idcentro"],
+    how="inner",
+)
 df_problemi_cuore["data"] = pd.to_datetime(df_problemi_cuore["data"], format="%Y-%m-%d")
 
 last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)[
@@ -610,7 +642,7 @@ last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)
 
 print(last_problem)
 
-wanted_patient = aa_prob_cuore_filtered.join(
+wanted_patient = select.join(
     (
         last_problem.reset_index(drop=True).ge(
             pd.to_datetime(
@@ -622,4 +654,5 @@ wanted_patient = aa_prob_cuore_filtered.join(
 )
 
 print(wanted_patient)
+print(len(wanted_patient))
 ### TODO: Punto 6
