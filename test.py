@@ -587,28 +587,28 @@ aa_prob_cuore_filtered = pd.merge(
     on=["idana", "idcentro"],
     how="inner",
 )
-print(len(df_prescrizioni_diabete_farmaci))
+print("aa_prob_cuore_filtered merged")
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
     df_diagnosi_and_esami[["idana", "idcentro"]], 
     on=["idana", "idcentro"],
     how="inner",
 )
-print("checkiamo")
-input(print(len(df_prescrizioni_diabete_farmaci)))
+print("df_prescrizioni_diabete_farmaci merged")
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     df_diagnosi_and_esami[["idana", "idcentro"]], 
     on=["idana", "idcentro"],
     how="inner",
 )
-
+print("df_prescirizioni_non_diabete merged")
 df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci.merge(
     df_diagnosi_and_esami[["idana", "idcentro"]],
     on=["idana", "idcentro"],
     how="inner",
 )
-
+print("df_prescrizioni_diabete_non_farmiaci merged")
 
 df_diagnosi_and_esami_and_prescrioni = pd.concat(df_diagnosi_and_esami, df_prescrizioni_diabete_farmaci, df_prescirizioni_non_diabete, df_prescrizioni_diabete_non_farmiaci)
+print("df_diagnosi_and_esami_and_prescrioni concatenated")
 cont = (
     df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
     .groupby(["idana", "idcentro"])
