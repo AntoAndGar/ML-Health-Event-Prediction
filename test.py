@@ -515,62 +515,58 @@ wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "A
 wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
 
 ### TODO: Punto 4
-df_esami_lab_par = pd.read_csv("sample/esamilaboratorioparametri.csv")
+#df esami par
 
 print("prima update: ")
-amd004 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
+amd004 = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
 print("numero AMD004 minori di 40: ", len(amd004[amd004.astype(float) < 40]))
 print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200]))
 
 
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
 )
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
 )
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
 )
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
 )
 
 print("dopo update: ")
-amd004_dopo = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
+amd004_dopo = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
 
 print("numero AMD004 minori di 40: ", len(amd004_dopo[amd004_dopo < 40]))
 print(
     "numero AMD004 maggiori di 200: ", len(amd004_dopo[amd004_dopo.astype(float) > 200])
 )
 
-df_esami_lab_par_calcolati = pd.read_csv(
-    "sample/esamilaboratorioparametricalcolati.csv"
-)
-
 print("prima update: ")
 
-stitch002 = df_esami_lab_par_calcolati[
-    df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+stitch002 = df_esami_par_cal[
+    df_esami_par_cal["codicestitch"] == "STITCH002"
 ]["valore"]
 print("numero STITCH001 minori di 30: ", len(stitch002[stitch002.astype(float) < 30]))
 print(
     "numero STITCH001 maggiori di 300: ", len(stitch002[stitch002.astype(float) > 300])
 )
 
-df_esami_lab_par_calcolati["valore"].update(
-    df_esami_lab_par_calcolati[
-        df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+df_esami_par_cal["valore"].update(
+    df_esami_par_cal[
+        df_esami_par_cal["codicestitch"] == "STITCH002"
     ]["valore"].clip(30, 300)
 )
-df_esami_lab_par_calcolati["valore"].update(
-    df_esami_lab_par_calcolati[
-        df_esami_lab_par_calcolati["codicestitch"] == "STITCH003"
+df_esami_par_cal["valore"].update(
+    df_esami_par_cal[
+        df_esami_par_cal["codicestitch"] == "STITCH003"
     ]["valore"].clip(60, 330)
 )
 
-stitch002_dopo = df_esami_lab_par_calcolati[
-    df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+stitch002_dopo = df_esami_par_cal[
+    df_esami_par_cal["codicestitch"] == "STITCH002"
 ]["valore"]
 
 
