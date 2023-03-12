@@ -511,62 +511,8 @@ print(groups_diagnosi_and_esami.head())
 print(groups_diagnosi_and_esami.tail())
 print(len(groups_diagnosi_and_esami))
 
-exit()
-df_esami_par = df_esami_par.groupby(["idana", "idcentro"], as_index=False).agg(
-    {"data": ["min", "max"]}
-)
-
-df_esami_par_cal = df_esami_par_cal.groupby(["idana", "idcentro"], as_index=False).agg(
-    {"data": ["min", "max"]}
-)
-
-df_diagnosi = df_diagnosi.groupby(["idana", "idcentro"], as_index=False).agg(
-    {"data": ["min", "max"]}
-)
-
 wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
 wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
-
-
-
-df_esami_stru = df_esami_stru.groupby(["idana", "idcentro"], as_index=False).agg(
-    {"data": ["min", "max"]}
-)
-
-df_esami_stru.head()
-### RIMUOVI I PAZIENTI CON TUTTI GLI EVENTI NELLO STESSO MESE
-df_esami_stru["data_min"] = pd.to_datetime(
-    df_esami_stru["data"]["min"], format="%Y-%m-%d"
-)
-df_esami_stru["data_max"] = pd.to_datetime(
-    df_esami_stru["data"]["max"], format="%Y-%m-%d"
-)
-
-df_esami_stru.info()
-df_esami_stru["diff"] = df_esami_stru["data_max"] - df_esami_stru["data_min"]
-print(len(df_esami_stru))
-print(len(df_esami_stru[df_esami_stru["diff"] < pd.Timedelta("30 days")]))
-print(len(df_esami_stru[df_esami_stru["diff"] == pd.Timedelta("0 days")]))
-
-df_esami_stru = df_esami_stru[df_esami_stru["diff"] > pd.Timedelta("30 days")]
-df_esami_stru = df_esami_stru.sort_values(by=["diff"])
-print(df_esami_stru.head())
-print(df_esami_stru.tail())
-
-
-###togliere dal dataframe principale ciò che non è in df_esami_stru
-df_esami_stru_key = df_esami_stru[["idana", "idcentro"]].drop_duplicates()
-aa_prob_cuore_filtered = pd.merge(
-    aa_prob_cuore,
-    df_esami_stru_key,
-    on=["idana", "idcentro"],
-    how="inner",
-)
-print(aa_prob_cuore_filtered)
-print(len(aa_prob_cuore_filtered))
-print(len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()))
-# int_df = pd.merge(d1, d2, how ='inner', on =['A', 'B'])
-
 
 ### TODO: Punto 4
 df_esami_lab_par = pd.read_csv("sample/esamilaboratorioparametri.csv")
