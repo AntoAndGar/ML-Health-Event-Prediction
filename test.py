@@ -573,7 +573,7 @@ print(
 )
 
 ### TODO: Punto 5
-patients_keys = df_diagnosi_and_esami[["idana", "idcentro", "annonascita","annoprimoaccesso","annodecesso"]].drop_duplicates()
+patients_keys = df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()
 aa_prob_cuore_filtered = pd.merge(
     aa_prob_cuore,
     patients_keys,
@@ -645,8 +645,11 @@ wanted_patient = select.join(
         )
     ).rename("label")
 )
+print(wanted_patient[["idana", "idcentro", "data", "label"]])
+wanted_patient = wanted_patient[wanted_patient["label"] == True]
 print("RISULATI PUNTO 1.5")
 print(wanted_patient)
 print(len(wanted_patient))
-print(len(wanted_patient[["idana", "idcentro"]].unique()))
+patients_keys = wanted_patient[["idana", "idcentro"]].drop_duplicates()
+print(len(patients_keys))
 ### TODO: Punto 6
