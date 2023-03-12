@@ -573,34 +573,34 @@ print(
 )
 
 ### TODO: Punto 5
-
+patients_keys = df_diagnosi_and_esami[["idana", "idcentro", "annonascita","annoprimoaccesso","annodecesso"]].drop_duplicates()
 aa_prob_cuore_filtered = pd.merge(
     aa_prob_cuore,
-    df_diagnosi_and_esami[["idana", "idcentro"]],
+    patients_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("aa_prob_cuore_filtered merged")
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    df_diagnosi_and_esami[["idana", "idcentro"]], 
+    patients_keys, 
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescrizioni_diabete_farmaci merged")
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    df_diagnosi_and_esami[["idana", "idcentro"]], 
+    patients_keys, 
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescirizioni_non_diabete merged")
 df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci.merge(
-    df_diagnosi_and_esami[["idana", "idcentro"]],
+    patients_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescrizioni_diabete_non_farmiaci merged")
 
-df_diagnosi_and_esami_and_prescrioni = pd.concat(df_diagnosi_and_esami, df_prescrizioni_diabete_farmaci, df_prescirizioni_non_diabete, df_prescrizioni_diabete_non_farmiaci)
+df_diagnosi_and_esami_and_prescrioni = pd.concat([df_diagnosi_and_esami, df_prescrizioni_diabete_farmaci, df_prescirizioni_non_diabete, df_prescrizioni_diabete_non_farmiaci])
 print("df_diagnosi_and_esami_and_prescrioni concatenated")
 cont = (
     df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
@@ -608,7 +608,7 @@ cont = (
     .size()
     .reset_index(name="count")
 )
-
+print("cont grouped")
 cont_filtered = cont[cont["count"] >= 2]
 
 select = df_diagnosi_and_esami_and_prescrioni.merge(
@@ -623,7 +623,7 @@ last_event = select.groupby(["idana", "idcentro"], group_keys=True)["data"].max(
 
 print(last_event)
 df_problemi_cuore = df_problemi_cuore.merge(
-    df_diagnosi_and_esami[["idana", "idcentro"]],
+    patients_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
@@ -648,5 +648,5 @@ wanted_patient = select.join(
 print("RISULATI PUNTO 1.5")
 print(wanted_patient)
 print(len(wanted_patient))
-print(len(wanted_patient["idana", "idcentro"].unique()))
+print(len(wanted_patient[["idana", "idcentro"]].unique()))
 ### TODO: Punto 6
