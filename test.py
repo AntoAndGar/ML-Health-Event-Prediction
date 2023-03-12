@@ -652,7 +652,8 @@ wanted_patient = select.join(
         )
     ).rename("label")
 )
-
+print("RISULATI PUNTO 1.5")
 print(wanted_patient)
 print(len(wanted_patient))
+print(len(wanted_patient["idana", "idcentro"].unique()))
 ### TODO: Punto 6
