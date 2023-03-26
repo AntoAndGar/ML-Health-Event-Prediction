@@ -46,6 +46,7 @@ def getInfoOnDiagnosi(df):
 
 
 # import the data
+# diagnosi table
 df_diagnosi = pd.read_csv("sample/diagnosi.csv", header=0)
 
 """
@@ -76,6 +77,7 @@ df_diagnosi["key"] = (
 print("numero record presenti in diagnosi: ", len(df_diagnosi["key"]))
 print("numero pazienti unici presenti in diagnosi: ", len(df_diagnosi["key"].unique()))
 
+# anagrafica table
 df_anagrafica_attivi = pd.read_csv("sample/anagraficapazientiattivi.csv", header=0)
 
 df_anagrafica_attivi["key"] = (
@@ -98,6 +100,7 @@ print(
     ),
 )
 
+# Diagnosi relative a prpoblemi cardiaci
 df_problemi_cuore = df_diagnosi[df_diagnosi["codiceamd"].isin(wanted_amd)]
 print(
     "numero pazienti presenti in diagnosi con codice amd in lista (problemi al cuore): ",
@@ -191,6 +194,7 @@ print(
 
 print("tipi possibili di diabete: ", df_anagrafica_attivi["tipodiabete"].unique())
 
+# anagrafica pazienti con problemi al cuore, e relativa diagnosi
 aa_prob_cuore = pd.merge(
     df_anagrafica_attivi, df_problemi_cuore, on=["idcentro", "idana", "key"]
 )
@@ -326,111 +330,236 @@ print("All filtered :")
 aa_prob_cuore.dropna(subset="annodiagnosidiabete", inplace=True)
 print(sum([1 for elem in aa_prob_cuore["key"].unique()]))  # 49829
 
-# df_esami_par = pd.read_csv('sample/esamilaboratorioparametri.csv')
-# df_esami_par_cal = pd.read_csv('sample/esamilaboratorioparametricalcolati.csv')
+
+### TODO Punto 2
+## Carica i dataset
+df_esami_par = pd.read_csv('sample/esamilaboratorioparametri.csv')
+print("loaded esami parametri")
+df_esami_par_cal = pd.read_csv('sample/esamilaboratorioparametricalcolati.csv')
+print("loaded esami parametri calcolati")
 df_esami_stru = pd.read_csv("sample/esamistrumentali.csv")
+print("loaded esami strumentali")
+df_diagnosi = pd.read_csv("sample/diagnosi.csv")
+print("loaded diagnosi")
+df_prescrizioni_diabete_farmaci = pd.read_csv("sample/prescrizionidiabetefarmaci.csv")
+print("loaded prescrizioni diabete farmaci")
+df_prescrizioni_diabete_non_farmiaci = pd.read_csv("sample/prescrizionidiabetenonfarmaci.csv")
+print("loaded prescrizioni diabete non farmaci")
+df_prescirizioni_non_diabete = pd.read_csv("sample/prescrizioninondiabete.csv")
+
+print("loaded prescrizioni non diabete")
+## Calcola le chiavi dei pazienti di interesse
+aa_cuore_key = aa_prob_cuore[["idana", "idcentro", "annonascita","annoprimoaccesso","annodecesso"]]
+aa_cuore_key = aa_cuore_key.drop_duplicates()
+print(len(aa_cuore_key))
+
+## Cast string to datatime
+aa_cuore_key.rename(columns={"annonascita": "appo"}, inplace=True)
+aa_cuore_key["annonascita"] = pd.to_datetime(
+    aa_cuore_key["appo"], format="%Y"
+)
+aa_cuore_key.drop(columns=["appo"], inplace=True)
+aa_cuore_key.rename(columns={"annoprimoaccesso": "appo"}, inplace=True)
+aa_cuore_key["annoprimoaccesso"] = pd.to_datetime(
+    aa_cuore_key["appo"], format="%Y"
+)
+aa_cuore_key.drop(columns=["appo"], inplace=True)
+aa_cuore_key.rename(columns={"annodecesso": "appo"}, inplace=True)
+aa_cuore_key["annodecesso"] = pd.to_datetime(
+    aa_cuore_key["appo"], format="%Y"
+)
+
+aa_cuore_key.drop(columns=["appo"], inplace=True)
+print(aa_cuore_key.head())
+
+
+df_esami_par.rename(columns={"data": "appo"}, inplace=True)
+df_esami_par["data"] = pd.to_datetime(
+    df_esami_par["appo"], format="%Y-%m-%d"
+)
+df_esami_par.drop(columns=["appo"], inplace=True)
+df_esami_par_cal.rename(columns={"data": "appo"}, inplace=True)
+df_esami_par_cal["data"] = pd.to_datetime(
+    df_esami_par_cal["appo"], format="%Y-%m-%d"
+)
+df_esami_par_cal.drop(columns=["appo"], inplace=True)
+df_esami_stru.rename(columns={"data": "appo"}, inplace=True)
+df_esami_stru["data"] = pd.to_datetime(
+    df_esami_stru["appo"], format="%Y-%m-%d"
+)
+df_esami_stru.drop(columns=["appo"], inplace=True)
+df_diagnosi.rename(columns={"data": "appo"}, inplace=True)
+df_diagnosi["data"] = pd.to_datetime(
+    df_diagnosi["appo"], format="%Y-%m-%d"
+)
+df_diagnosi.drop(columns=["appo"], inplace=True)
+df_prescrizioni_diabete_farmaci.rename(columns={"data": "appo"}, inplace=True)
+df_prescrizioni_diabete_farmaci["data"] = pd.to_datetime(
+    df_prescrizioni_diabete_farmaci["appo"], format="%Y-%m-%d"
+)
+df_prescrizioni_diabete_farmaci.drop(columns=["appo"], inplace=True)
+df_prescrizioni_diabete_non_farmiaci.rename(columns={"data": "appo"}, inplace=True)
+df_prescrizioni_diabete_non_farmiaci["data"] = pd.to_datetime(
+    df_prescrizioni_diabete_non_farmiaci["appo"], format="%Y-%m-%d"
+)
+df_prescrizioni_diabete_non_farmiaci.drop(columns=["appo"], inplace=True)
+df_prescirizioni_non_diabete.rename(columns={"data": "appo"}, inplace=True)
+df_prescirizioni_non_diabete["data"] = pd.to_datetime(
+    df_prescirizioni_non_diabete["appo"], format="%Y-%m-%d"
+)
+df_prescirizioni_non_diabete.drop(columns=["appo"], inplace=True)
+
+
+## Rimuovi pazienti non di interesse
+df_esami_par = df_esami_par.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_esami_par_cal = df_esami_par_cal.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_esami_stru = df_esami_stru.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_diagnosi = df_diagnosi.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+dfs_esami_diagnosi_and_prescrizioni = [df_esami_par, df_esami_par_cal, df_esami_stru, df_diagnosi, df_prescrizioni_diabete_farmaci, df_prescrizioni_diabete_non_farmiaci, df_prescirizioni_non_diabete]
+
+df_esami_par = df_esami_par[df_esami_par["data"] >= df_esami_par["annonascita"]]
+appo_1 = df_esami_par[df_esami_par["data"] <= df_esami_par["annodecesso"]]
+appo_2 = df_esami_par[pd.isnull(df_esami_par["annodecesso"])]
+df_esami_par = pd.concat([appo_1, appo_2])
+
+#df_esami_par = pd.concat(df_esami_par[df_esami_par["data"] <= df_esami_par["annodecesso"]], df_esami_par[df_esami_par["annodecesso"] == pd.NaT])
+
+df_esami_par_cal = df_esami_par_cal[df_esami_par_cal["data"] >= df_esami_par_cal["annonascita"]]
+appo_1 = df_esami_par_cal[df_esami_par_cal["data"] <= df_esami_par_cal["annodecesso"]]
+appo_2 = df_esami_par_cal[pd.isnull(df_esami_par_cal["annodecesso"])]
+df_esami_par_cal = pd.concat([appo_1, appo_2])
+#df_esami_par_cal = pd.concat(df_esami_par_cal[df_esami_par_cal["data"] <= df_esami_par_cal["annodecesso"]], df_esami_par_cal[df_esami_par_cal["annodecesso"] == pd.NaT])
+
+df_esami_stru = df_esami_stru[df_esami_stru["data"] >= df_esami_stru["annonascita"]]
+appo_1 = df_esami_stru[df_esami_stru["data"] <= df_esami_stru["annodecesso"]]
+appo_2  = df_esami_stru[pd.isnull(df_esami_stru["annodecesso"])]
+df_esami_stru = pd.concat([appo_1, appo_2])
+#df_esami_stru = pd.concat([df_esami_stru[df_esami_stru["data"] <= df_esami_stru["annodecesso"]], df_esami_stru[df_esami_stru["annodecesso"] == pd.NaT]])
+
+df_diagnosi = df_diagnosi[df_diagnosi["data"] >= df_diagnosi["annonascita"]]
+appo_1 = df_diagnosi[df_diagnosi["data"] <= df_diagnosi["annodecesso"]]
+appo_2 = df_diagnosi[pd.isnull(df_diagnosi["annodecesso"])]
+df_diagnosi = pd.concat([appo_1, appo_2])
+#df_diagnosi = pd.concat([df_diagnosi[df_diagnosi["data"] <= df_diagnosi["annodecesso"]], df_diagnosi[df_diagnosi["annodecesso"] == pd.NaT]])
+
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["data"] >= df_prescrizioni_diabete_farmaci["annonascita"]]
+appo_1 = df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["data"] <= df_prescrizioni_diabete_farmaci["annodecesso"]]
+appo_2 = df_prescrizioni_diabete_farmaci[pd.isnull(df_prescrizioni_diabete_farmaci["annodecesso"])]
+df_prescrizioni_diabete_farmaci = pd.concat([appo_1, appo_2])
+#df_prescrizioni_diabete_farmaci = pd.concat([df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["data"] <= df_prescrizioni_diabete_farmaci["annodecesso"]], df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["annodecesso"] == pd.NaT]])
+
+df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci[df_prescrizioni_diabete_non_farmiaci["data"] >= df_prescrizioni_diabete_non_farmiaci["annonascita"]]
+appo_1 = df_prescrizioni_diabete_non_farmiaci[df_prescrizioni_diabete_non_farmiaci["data"] <= df_prescrizioni_diabete_non_farmiaci["annodecesso"]]
+appo_2 = df_prescrizioni_diabete_non_farmiaci[pd.isnull(df_prescrizioni_diabete_non_farmiaci["annodecesso"])]
+df_prescrizioni_diabete_non_farmiaci = pd.concat([appo_1, appo_2])
+#df_prescrizioni_diabete_non_farmiaci = pd.concat([df_prescrizioni_diabete_non_farmiaci[df_prescrizioni_diabete_non_farmiaci["data"] <= df_prescrizioni_diabete_non_farmiaci["annodecesso"]], df_prescrizioni_diabete_non_farmiaci[df_prescrizioni_diabete_non_farmiaci["annodecesso"] == pd.NaT]])
+
+df_prescirizioni_non_diabete = df_prescirizioni_non_diabete[df_prescirizioni_non_diabete["data"] >= df_prescirizioni_non_diabete["annonascita"]]
+appo_1 = df_prescirizioni_non_diabete[df_prescirizioni_non_diabete["data"] <= df_prescirizioni_non_diabete["annodecesso"]]
+appo_2 = df_prescirizioni_non_diabete[pd.isnull(df_prescirizioni_non_diabete["annodecesso"])]
+df_prescirizioni_non_diabete = pd.concat([appo_1, appo_2])
+
+#df_prescirizioni_non_diabete = pd.concat([df_prescirizioni_non_diabete[df_prescirizioni_non_diabete["data"] <= df_prescirizioni_non_diabete["annodecesso"]], df_prescirizioni_non_diabete[df_prescirizioni_non_diabete["annodecesso"] == pd.NaT]])
+print("Pulite le date")
+### TODO Punto 3
+## Append datasets
+df_diagnosi_and_esami = pd.concat([df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru], ignore_index=True)
+print("lunghezza df_diagnosi_and_esami: ")
+df_diagnosi_and_esami_keys = df_diagnosi_and_esami[["idana", "idcentro"]]
+df_diagnosi_and_esami_keys = df_diagnosi_and_esami_keys.drop_duplicates()  
+
+groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg({"data": ["min", "max"]})
+'''
+groups_diagnosi_and_esami["data_min"] = pd.to_datetime(
+    groups_diagnosi_and_esami["data"]["min"], format="%Y-%m-%d"
+)
+groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
+    groups_diagnosi_and_esami["data"]["max"], format="%Y-%m-%d"
+)
+'''
+groups_diagnosi_and_esami["data_min"] = groups_diagnosi_and_esami["data"]["min"]
+groups_diagnosi_and_esami["data_max"] = groups_diagnosi_and_esami["data"]["max"]
+print(groups_diagnosi_and_esami.head(30))
+print("trovato")
+
+'''
+groups_diagnosi_and_esami["data_min"] = pd.to_datetime(
+    groups_diagnosi_and_esami["data"]["min"], format="%Y-%m-%d"
+)
+groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
+    groups_diagnosi_and_esami["data"]["max"], format="%Y-%m-%d"
+)
+'''
+groups_diagnosi_and_esami["diff"] = groups_diagnosi_and_esami["data_max"] - groups_diagnosi_and_esami["data_min"]
+print(groups_diagnosi_and_esami.head(30))
+print(len(groups_diagnosi_and_esami[groups_diagnosi_and_esami["diff"] == pd.Timedelta("0 days")]))
+print(len(groups_diagnosi_and_esami[groups_diagnosi_and_esami["diff"] < pd.Timedelta("30 days")]))
+
+groups_diagnosi_and_esami = groups_diagnosi_and_esami[groups_diagnosi_and_esami["diff"] > pd.Timedelta("30 days")]
+groups_diagnosi_and_esami = groups_diagnosi_and_esami.sort_values(by=["diff"])
+print(groups_diagnosi_and_esami.head())
+print(groups_diagnosi_and_esami.tail())
+print(len(groups_diagnosi_and_esami))
 
 wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
 wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
 
-aa_cuore_key = aa_prob_cuore[["idana", "idcentro"]]
-aa_cuore_key = aa_cuore_key.drop_duplicates()
-
-df_esami_stru = df_esami_stru.groupby(["idana", "idcentro"], as_index=False).agg(
-    {"data": ["min", "max"]}
-)
-df_esami_stru.head()
-### RIMUOVI I PAZIENTI CON TUTTI GLI EVENTI NELLO STESSO MESE
-df_esami_stru["data_min"] = pd.to_datetime(
-    df_esami_stru["data"]["min"], format="%Y-%m-%d"
-)
-df_esami_stru["data_max"] = pd.to_datetime(
-    df_esami_stru["data"]["max"], format="%Y-%m-%d"
-)
-
-df_esami_stru.info()
-df_esami_stru["diff"] = df_esami_stru["data_max"] - df_esami_stru["data_min"]
-print(len(df_esami_stru))
-print(len(df_esami_stru[df_esami_stru["diff"] < pd.Timedelta("30 days")]))
-print(len(df_esami_stru[df_esami_stru["diff"] == pd.Timedelta("0 days")]))
-
-df_esami_stru = df_esami_stru[df_esami_stru["diff"] > pd.Timedelta("30 days")]
-df_esami_stru = df_esami_stru.sort_values(by=["diff"])
-print(df_esami_stru.head())
-print(df_esami_stru.tail())
-
-
-###togliere dal dataframe principale ciò che non è in df_esami_stru
-df_esami_stru_key = df_esami_stru[["idana", "idcentro"]].drop_duplicates()
-aa_prob_cuore_filtered = pd.merge(
-    aa_prob_cuore,
-    df_esami_stru_key,
-    on=["idana", "idcentro"],
-    how="inner",
-)
-print(aa_prob_cuore_filtered)
-print(len(aa_prob_cuore_filtered))
-print(len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()))
-# int_df = pd.merge(d1, d2, how ='inner', on =['A', 'B'])
-
-
 ### TODO: Punto 4
-df_esami_lab_par = pd.read_csv("sample/esamilaboratorioparametri.csv")
+#df esami par
 
 print("prima update: ")
-amd004 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
+amd004 = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
 print("numero AMD004 minori di 40: ", len(amd004[amd004.astype(float) < 40]))
 print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200]))
 
 
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
 )
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
 )
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
 )
-df_esami_lab_par["valore"].update(
-    df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
+df_esami_par["valore"].update(
+    df_esami_par[df_esami_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
 )
 
 print("dopo update: ")
-amd004_dopo = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
+amd004_dopo = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
 
 print("numero AMD004 minori di 40: ", len(amd004_dopo[amd004_dopo < 40]))
 print(
     "numero AMD004 maggiori di 200: ", len(amd004_dopo[amd004_dopo.astype(float) > 200])
 )
 
-df_esami_lab_par_calcolati = pd.read_csv(
-    "sample/esamilaboratorioparametricalcolati.csv"
-)
-
 print("prima update: ")
 
-stitch002 = df_esami_lab_par_calcolati[
-    df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+stitch002 = df_esami_par_cal[
+    df_esami_par_cal["codicestitch"] == "STITCH002"
 ]["valore"]
 print("numero STITCH001 minori di 30: ", len(stitch002[stitch002.astype(float) < 30]))
 print(
     "numero STITCH001 maggiori di 300: ", len(stitch002[stitch002.astype(float) > 300])
 )
 
-df_esami_lab_par_calcolati["valore"].update(
-    df_esami_lab_par_calcolati[
-        df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+df_esami_par_cal["valore"].update(
+    df_esami_par_cal[
+        df_esami_par_cal["codicestitch"] == "STITCH002"
     ]["valore"].clip(30, 300)
 )
-df_esami_lab_par_calcolati["valore"].update(
-    df_esami_lab_par_calcolati[
-        df_esami_lab_par_calcolati["codicestitch"] == "STITCH003"
+df_esami_par_cal["valore"].update(
+    df_esami_par_cal[
+        df_esami_par_cal["codicestitch"] == "STITCH003"
     ]["valore"].clip(60, 330)
 )
 
-stitch002_dopo = df_esami_lab_par_calcolati[
-    df_esami_lab_par_calcolati["codicestitch"] == "STITCH002"
+stitch002_dopo = df_esami_par_cal[
+    df_esami_par_cal["codicestitch"] == "STITCH002"
 ]["valore"]
 
 
@@ -443,30 +572,61 @@ print(
     len(stitch002_dopo[stitch002_dopo.astype(float) > 300]),
 )
 
-
 ### TODO: Punto 5
+patients_keys = df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()
+aa_prob_cuore_filtered = pd.merge(
+    aa_prob_cuore,
+    patients_keys,
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print("aa_prob_cuore_filtered merged")
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
+    patients_keys, 
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print("df_prescrizioni_diabete_farmaci merged")
+df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
+    patients_keys, 
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print("df_prescirizioni_non_diabete merged")
+df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci.merge(
+    patients_keys,
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print("df_prescrizioni_diabete_non_farmiaci merged")
 
+df_diagnosi_and_esami_and_prescrioni = pd.concat([df_diagnosi_and_esami, df_prescrizioni_diabete_farmaci, df_prescirizioni_non_diabete, df_prescrizioni_diabete_non_farmiaci])
+print("df_diagnosi_and_esami_and_prescrioni concatenated")
 cont = (
-    aa_prob_cuore_filtered[["idana", "idcentro"]]
+    df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
     .groupby(["idana", "idcentro"])
     .size()
     .reset_index(name="count")
 )
-
+print("cont grouped")
 cont_filtered = cont[cont["count"] >= 2]
 
-select = aa_prob_cuore_filtered.merge(
+select = df_diagnosi_and_esami_and_prescrioni.merge(
     cont_filtered, on=["idana", "idcentro"], how="inner"
 )
 
 print(select)
 
-select["data"] = pd.to_datetime(select["data"], format="%Y-%m-%d")
+#select["data"] = pd.to_datetime(select["data"], format="%Y-%m-%d")
 
 last_event = select.groupby(["idana", "idcentro"], group_keys=True)["data"].max()
 
 print(last_event)
-
+df_problemi_cuore = df_problemi_cuore.merge(
+    patients_keys,
+    on=["idana", "idcentro"],
+    how="inner",
+)
 df_problemi_cuore["data"] = pd.to_datetime(df_problemi_cuore["data"], format="%Y-%m-%d")
 
 last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)[
@@ -475,7 +635,7 @@ last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)
 
 print(last_problem)
 
-wanted_patient = aa_prob_cuore_filtered.join(
+wanted_patient = select.join(
     (
         last_problem.reset_index(drop=True).ge(
             pd.to_datetime(
@@ -485,6 +645,11 @@ wanted_patient = aa_prob_cuore_filtered.join(
         )
     ).rename("label")
 )
-
+print(wanted_patient[["idana", "idcentro", "data", "label"]])
+wanted_patient = wanted_patient[wanted_patient["label"] == True]
+print("RISULATI PUNTO 1.5")
 print(wanted_patient)
+print(len(wanted_patient))
+patients_keys = wanted_patient[["idana", "idcentro"]].drop_duplicates()
+print(len(patients_keys))
 ### TODO: Punto 6
