@@ -5,54 +5,6 @@ import multiprocessing
 
 # from multiprocessing import Pool
 
-
-def printSexInfo(dataset):
-    print("Sex info")
-    print(dataset["sesso"].unique())
-    print("sesso ad N/A", dataset["sesso"].isna().sum())
-    print("Maschi: ", sum(dataset["sesso"].isin(["M"])))
-    print("Femmine: ", sum(dataset["sesso"].isin(["F"])))
-
-
-#    dataset['sesso'].plot(kind='kde')
-
-
-def getDeaseasePercentage(dataset, deaseases):
-    print("Deasease: ", deaseases)
-    # print(dataset.columns)
-    percent = "\nPercentage of deasease:\n"
-    for deasease in deaseases:
-        # print("Deasease: ", deasease)
-        tempdataset = dataset[dataset["codiceamd"].isin([deasease])]
-        tempdataset2 = tempdataset["key"].unique()
-        percent += (
-            deasease
-            + ": "
-            + str(len(tempdataset2) / len(dataset["key"].unique()) * 100)
-            + "%\n"
-        )
-    print(percent)
-
-
-def getInfoOnDiagnosi(df):
-    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-    print("Info on diagnosi")
-    print(
-        "il dizionario stampato è formattato così: 'chiave': [minori, uguali, maggiori] rispetto a data"
-    )
-    dates = ["annodiagnosidiabete", "annonascita", "annoprimoaccesso", "annodecesso"]
-    stampami = dict()
-    for d in dates:
-        df["extra"] = df["data"].dropna().str[:4]
-        df["extra"] = df["extra"].astype(float)
-        minor = (df[d].astype(float) < df["extra"]).sum()
-        equal = (df[d].astype(float) == df["extra"]).sum()
-        more = (df[d].astype(float) > df["extra"]).sum()
-        stampami[d] = [minor, equal, more]
-
-    print(stampami)
-
-
 # import the data
 file_names = [
     "anagraficapazientiattivi",
@@ -143,6 +95,7 @@ df_diagnosi_problemi_cuore = df_diagnosi[
 ]
 
 ######## PUNTO 2 ########
+print("############## POINT 2 START ##############")
 
 print(
     "numero pazienti presenti in diagnosi con codice amd in lista (con problemi al cuore): ",
@@ -214,17 +167,15 @@ print(
 print("tipi possibili di diabete: ", df_anagrafica_attivi["tipodiabete"].unique())
 # in anagrafica abbiamo solo pazienti con diagnosi di diabete di tipo 2 valore 5 in 'tipodiabete'
 # quindi possiamo fillare l'annodiagnosidiabete con l'annoprimoaccesso
+# TODO: visto che il tipo diabete è sempre lo stesso si può eliminare la colonna dal df per risparmiare memoria
 
 print(
     "numero pazienti con anno diagnosi diabete a N/A, ma che hanno l'anno di primo accesso: ",
-    sum(
-        [
-            1
-            for el in df_anagrafica_attivi[
-                df_anagrafica_attivi["annodiagnosidiabete"].isna()
-                & df_anagrafica_attivi["annoprimoaccesso"].notnull()
-            ]["key"]
-        ]
+    len(
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"].isna()
+            & df_anagrafica_attivi["annoprimoaccesso"].notnull()
+        ]["key"]
     ),
 )
 
@@ -235,7 +186,7 @@ aa_prob_cuore = pd.merge(
 
 print(
     "numero pazienti con problemi al cuore: ",
-    sum([1 for elem in aa_prob_cuore["key"].unique()]),
+    len(aa_prob_cuore["key"].unique()),
 )
 
 
@@ -257,13 +208,10 @@ print(
 
 print(
     "numero pazienti unici con data di primo accesso maggiore della data di decesso: ",
-    sum(
-        [
-            1
-            for elem in aa_prob_cuore[
-                aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]
-            ]["key"].unique()
-        ]
+    len(
+        aa_prob_cuore[aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]][
+            "key"
+        ].unique()
     ),
 )
 
@@ -275,13 +223,10 @@ print(
 
 print(
     "numero pazienti unici con data di diagnosi di diabete maggiore della data di decesso: ",
-    sum(
-        [
-            1
-            for elem in aa_prob_cuore[
-                aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]
-            ]["key"].unique()
-        ]
+    len(
+        aa_prob_cuore[
+            aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]
+        ]["key"].unique()
     ),
 )
 
@@ -292,30 +237,93 @@ print(
 
 print(
     "numero pazienti unici con anno diagnosi diabete a N/A: ",
-    sum(
-        [
-            1
-            for elem in aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"].isna()][
-                "key"
-            ].unique()
-        ]
-    ),
+    len(aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"].isna()]["key"].unique()),
 )  # 526
 
 # in anagrafica abbiamo solo pazienti con diagnosi di diabete di tipo 2 valore 5 in 'tipodiabete'
 # quindi possiamo fillare l'annodiagnosidiabete con l'annoprimoaccesso
 print(
     "numero righe con anno diagnosi diabete a N/A ma con anno primo accesso presente: ",
-    sum(
-        [
-            1
-            for el in aa_prob_cuore[
-                aa_prob_cuore["annodiagnosidiabete"].isna()
-                & aa_prob_cuore["annoprimoaccesso"].notnull()
-            ]["key"]
-        ]
+    len(
+        aa_prob_cuore[
+            aa_prob_cuore["annodiagnosidiabete"].isna()
+            & aa_prob_cuore["annoprimoaccesso"].notnull()
+        ]["key"]
     ),
 )  # 1797
+
+
+def printSexInfo(dataset):
+    dataset = dataset[["idcentro", "idana", "sesso"]].drop_duplicates()
+    print("numero righe del df: ", len(dataset))
+
+    print("Sex info")
+    print(dataset["sesso"].unique())
+    print("sesso ad N/A", dataset["sesso"].isna().sum())
+    print("Maschi: ", sum(dataset["sesso"].isin(["M"])))
+    print("Femmine: ", sum(dataset["sesso"].isin(["F"])))
+
+
+#    dataset['sesso'].plot(kind='kde')
+
+
+def getDeaseasePercentage(dataset, deaseases):
+    print("Deasease: ", deaseases)
+    # print(dataset.columns)
+    percent = "Percentage of deasease:\n"
+    dataset = dataset[["idcentro", "idana", "codiceamd", "key"]].drop_duplicates()
+    print("numero righe del df: ", len(dataset))
+
+    for deasease in deaseases:
+        # print("Deasease: ", deasease)
+        tempdataset = dataset[dataset["codiceamd"].isin([deasease])]
+        tempdataset2 = tempdataset["key"].unique()
+        total = len(dataset["key"].unique())
+        percent += (
+            deasease
+            + ": "
+            + str(len(tempdataset2) / total * 100)
+            + "%\t"
+            + str(len(tempdataset2))
+            + " su "
+            + str(total)
+            + "\n"
+        )
+    print(percent)
+
+
+def getInfoOnDiagnosi(df):
+    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    print("Info on diagnosi")
+    print(
+        "il dizionario stampato è formattato così: 'chiave': [minori, uguali, maggiori] rispetto a data"
+    )
+    dates = ["annodiagnosidiabete", "annonascita", "annoprimoaccesso", "annodecesso"]
+    stampami = dict()
+    df = df[
+        [
+            "idcentro",
+            "idana",
+            "annodiagnosidiabete",
+            "annonascita",
+            "annoprimoaccesso",
+            "annodecesso",
+            "data",
+        ]
+    ].drop_duplicates()
+
+    print("numero righe del df: ", len(df))
+
+    for d in dates:
+        df["extra"] = df["data"].dropna().str[:4]
+        df["extra"] = df["extra"].astype(float)
+        minor = (df[d].astype(float) < df["extra"]).sum()
+        equal = (df[d].astype(float) == df["extra"]).sum()
+        more = (df[d].astype(float) > df["extra"]).sum()
+        stampami[d] = [minor, equal, more]
+
+    print(stampami)
+
 
 getInfoOnDiagnosi(aa_prob_cuore)
 # Sesso
@@ -325,14 +333,34 @@ print("Fra i pazienti con problemi al cuore abbiamo:")
 printSexInfo(aa_prob_cuore)
 # Deasease Distribution
 getDeaseasePercentage(aa_prob_cuore, amd_of_cardiovascular_event)
+# TODO: qui i numeri non tornano quindi significa che stessi pazienti hanno avuto più codici amd diversi
+# ora vai a capire in ambito medico se significa che hanno più problemi diversi o che hanno avuto diverse diagnosi,
+# che la malattia progredisce e quindi cambia codice amd, bho
+# provo a capire quali sono i pazienti che hanno avuto più codici amd diversi:
+print(
+    "numero pazienti con più codici amd diversi: ",
+    len(aa_prob_cuore[aa_prob_cuore["key"].duplicated(keep=False)]["key"].unique()),
+)
+
+# print(
+#     "pazienti con più codici amd diversi: ",
+#     aa_prob_cuore[aa_prob_cuore["key"].duplicated(keep=False)]["key"].unique(),
+# )
+
+print(
+    "numero pazienti con un unico codice amd: ",
+    len(aa_prob_cuore[~aa_prob_cuore["key"].duplicated(keep=False)]["key"].unique()),
+)
+
 # TODO: qui si potrebbe calcolare anche qual'è la percentuale in base al sesso e casomai anche per età
+del df_anagrafica_attivi
 
 aa_prob_cuore = aa_prob_cuore.drop(
     aa_prob_cuore[
         aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]
     ].index,
 )
-print(sum([1 for elem in aa_prob_cuore["key"].unique()]))
+print(len(aa_prob_cuore["key"].unique()))
 
 aa_prob_cuore = aa_prob_cuore.drop(
     aa_prob_cuore[
@@ -341,20 +369,17 @@ aa_prob_cuore = aa_prob_cuore.drop(
 )
 
 print("dopo scarto :")
-print(sum([1 for elem in aa_prob_cuore["key"].unique()]))
+print(len(aa_prob_cuore["key"].unique()))
 
 # siccome più della metà dei pazienti che hanno problemi al cuore
 # hanno l'anno di diagnosi di diabete minore dell'anno di primo accesso
 # noi abbiamo deciso di fillare l'annodiagnosidiabete con l'anno primo accesso
 print(
     "numero pazienti unici con anno diagnosi diabete minore dell'anno primo accesso: ",
-    sum(
-        [
-            1
-            for elem in aa_prob_cuore[
-                aa_prob_cuore["annodiagnosidiabete"] < aa_prob_cuore["annoprimoaccesso"]
-            ]["key"].unique()
-        ]
+    len(
+        aa_prob_cuore[
+            aa_prob_cuore["annodiagnosidiabete"] < aa_prob_cuore["annoprimoaccesso"]
+        ]["key"].unique()
     ),
 )  # 27592
 
@@ -366,11 +391,13 @@ aa_prob_cuore.loc[
 
 print("All filtered :")
 aa_prob_cuore = aa_prob_cuore.dropna(subset="annodiagnosidiabete")
-print(sum([1 for elem in aa_prob_cuore["key"].unique()]))  # 49829
+print(len(aa_prob_cuore["key"].unique()))  # 49829
 
 
 ### TODO Punto 2 per dataset diversi da anagrafica attivi e diagnosi (?)
 ## Carica i dataset
+print("############## LOADING DATASETS ##############")
+
 df_esami_par = df_list["esamilaboratorioparametri"].result()
 # pd.read_csv("sample/esamilaboratorioparametri.csv", header=0, index_col=False)
 print("loaded esami parametri")
@@ -398,6 +425,7 @@ print("loaded prescrizioni diabete non farmaci")
 df_prescirizioni_non_diabete = df_list["prescrizioninondiabete"].result()
 # pd.read_csv("sample/prescrizioninondiabete.csv", header=0, index_col=False)
 print("loaded prescrizioni non diabete")
+del df_list
 
 ## Calcola le chiavi dei pazienti di interesse
 aa_cuore_key = aa_prob_cuore[
@@ -474,6 +502,9 @@ df_prescrizioni_diabete_non_farmiaci = df_prescrizioni_diabete_non_farmiaci.merg
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     aa_cuore_key, on=["idana", "idcentro"], how="inner"
 )
+
+del aa_cuore_key
+
 dfs_esami_diagnosi_and_prescrizioni = [
     df_esami_par,
     df_esami_par_cal,
@@ -554,6 +585,7 @@ df_prescirizioni_non_diabete = pd.concat([appo_1, appo_2])
 print("Pulite le date")
 ### TODO Punto 3
 ## Append datasets
+print("############## POINT 3 START ##############")
 df_diagnosi_and_esami = pd.concat(
     [df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru], ignore_index=True
 )
@@ -617,6 +649,7 @@ wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH
 
 ### TODO: Punto 4
 # df esami par
+print("############## POINT 4 START ##############")
 
 print("prima update: ")
 amd004 = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
@@ -679,6 +712,8 @@ print(
 )
 
 ### TODO: Punto 5
+print("############## POINT 5 START ##############")
+
 patients_keys = df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()
 aa_prob_cuore_filtered = pd.merge(
     aa_prob_cuore,
