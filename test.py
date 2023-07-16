@@ -6,6 +6,8 @@ import multiprocessing
 # from multiprocessing import Pool
 
 # import the data
+print("############## STARTING COMPUTATION ##############")
+
 file_names = [
     "anagraficapazientiattivi",
     "diagnosi",
@@ -28,6 +30,8 @@ with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as exec
     for name in file_names:
         df_list[str(name)] = executor.submit(read_csv, f"sample/{name}.csv")
 
+print("############## FUTURES CREATED ##############")
+
 # with Pool(processes=multiprocessing.cpu_count()) as pool:
 #     df_list1 = pool.map(read_csv, paths)
 
@@ -35,7 +39,6 @@ with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as exec
 
 # diagnosi table
 df_diagnosi = df_list["diagnosi"].result()
-# pd.read_csv("sample/diagnosi.csv", header=0, index_col=False)
 
 """
 AMD047: Myocardial infarction
@@ -461,7 +464,7 @@ aa_cuore_key = aa_prob_cuore[
         "annonascita",
         "annoprimoaccesso",
         "annodecesso",
-    ]  # TODO: why here we need those dates?
+    ]
 ]
 aa_cuore_key = aa_cuore_key.drop_duplicates()
 print(len(aa_cuore_key))
@@ -508,7 +511,7 @@ list_of_df = [
     df_prescirizioni_non_diabete,
 ]
 
-## Cast string to datatime
+## Cast string to datetime
 for df in list_of_df:
     df["data"] = cast_to_datetime(df, "data", format="%Y-%m-%d")
 
@@ -621,16 +624,22 @@ print("Pulite le date")
 ### TODO Punto 3
 ## Append datasets
 print("############## POINT 3 START ##############")
+# TODO: verify if the concat is correct the samer as the merge, Aand also if is necessary (because I don't think so)
 df_diagnosi_and_esami = pd.concat(
-    [df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru], ignore_index=True
-)
+    objs=(
+        idf.set_index(["idana", "idcentro"])
+        for idf in [df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru]
+    ),
+    # ignore_index=True,
+    join="inner",
+).reset_index()  # 49771
 
-df_diagnosi_and_esami_keys = df_diagnosi_and_esami[["idana", "idcentro"]]
-df_diagnosi_and_esami_keys = df_diagnosi_and_esami_keys.drop_duplicates()
 print(
     "lunghezza df_diagnosi_and_esami: ",
-    len(df_diagnosi_and_esami_keys.drop_duplicates()),
+    len(df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()),
 )
+print(df_diagnosi_and_esami.head())
+print(df_diagnosi_and_esami.info())
 
 groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg(
     {"data": ["min", "max"]}
@@ -646,7 +655,7 @@ groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
 groups_diagnosi_and_esami["data_min"] = groups_diagnosi_and_esami["data"]["min"]
 groups_diagnosi_and_esami["data_max"] = groups_diagnosi_and_esami["data"]["max"]
 print(groups_diagnosi_and_esami.head(30))
-print("trovato")
+print("groups_diagnosi_and_esami")
 
 """
 groups_diagnosi_and_esami["data_min"] = pd.to_datetime(
@@ -661,18 +670,20 @@ groups_diagnosi_and_esami["diff"] = (
 )
 print(groups_diagnosi_and_esami.head(30))
 print(
+    "numero di pazienti con tutte le date in un unico giorno: ",
     len(
         groups_diagnosi_and_esami[
             groups_diagnosi_and_esami["diff"] == pd.Timedelta("0 days")
         ]
-    )
+    ),
 )
 print(
+    "numero di pazienti con tutte le date in un unico mese: ",
     len(
         groups_diagnosi_and_esami[
             groups_diagnosi_and_esami["diff"] < pd.Timedelta("30 days")
         ]
-    )
+    ),
 )
 
 groups_diagnosi_and_esami = groups_diagnosi_and_esami[
@@ -681,12 +692,15 @@ groups_diagnosi_and_esami = groups_diagnosi_and_esami[
 groups_diagnosi_and_esami = groups_diagnosi_and_esami.sort_values(by=["diff"])
 print(groups_diagnosi_and_esami.head())
 print(groups_diagnosi_and_esami.tail())
-print(len(groups_diagnosi_and_esami))
+print(
+    "numero pazienti fine punto 3: ",
+    len(groups_diagnosi_and_esami),
+)
+
+### TODO: Punto 4
 
 wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
 wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
-
-### TODO: Punto 4
 # df esami par
 print("############## POINT 4 START ##############")
 
@@ -695,19 +709,32 @@ amd004 = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
 print("numero AMD004 minori di 40: ", len(amd004[amd004.astype(float) < 40]))
 print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200]))
 
+# df_esami_par_copy = df_esami_par.copy()
+mask = df_esami_par["codiceamd"] == "AMD004"
+df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(40, 200)
+# would like to use this single line but from documentation it seems that it can cause problems
+# so we must use this in two lines with a precomutation of a mask
+# df_esami_par["valore"].update(
+#     df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
+# )
 
-df_esami_par["valore"].update(
-    df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
-)
-df_esami_par["valore"].update(
-    df_esami_par[df_esami_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
-)
-df_esami_par["valore"].update(
-    df_esami_par[df_esami_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
-)
-df_esami_par["valore"].update(
-    df_esami_par[df_esami_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
-)
+mask = df_esami_par["codiceamd"] == "AMD005"
+df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(40, 130)
+# df_esami_par["valore"].update(
+#     df_esami_par[df_esami_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
+# )
+
+mask = df_esami_par["codiceamd"] == "AMD007"
+df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(50, 500)
+# df_esami_par["valore"].update(
+#     df_esami_par[df_esami_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
+# )
+
+mask = df_esami_par["codiceamd"] == "AMD008"
+df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(5, 15)
+# df_esami_par["valore"].update(
+#     df_esami_par[df_esami_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
+# )
 
 print("dopo update: ")
 amd004_dopo = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
@@ -725,22 +752,31 @@ print(
     "numero STITCH001 maggiori di 300: ", len(stitch002[stitch002.astype(float) > 300])
 )
 
-df_esami_par_cal["valore"].update(
-    df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"]["valore"].clip(
-        30, 300
-    )
+mask = df_esami_par_cal["codicestitch"] == "STITCH002"
+df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
+    30, 300
 )
-df_esami_par_cal["valore"].update(
-    df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH003"]["valore"].clip(
-        60, 330
-    )
+# df_esami_par_cal["valore"].update(
+#     df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"]["valore"].clip(
+#         30, 300
+#     )
+# )
+
+mask = df_esami_par_cal["codicestitch"] == "STITCH003"
+df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
+    60, 330
 )
+# df_esami_par_cal["valore"].update(
+#     df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH003"]["valore"].clip(
+#         60, 330
+#     )
+# )
 
 stitch002_dopo = df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"][
     "valore"
 ]
 
-
+print("dopo update: ")
 print(
     "numero STITCH001 minori di 30: ",
     len(stitch002_dopo[stitch002_dopo < 30]),
