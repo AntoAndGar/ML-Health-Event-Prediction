@@ -817,13 +817,18 @@ df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
 print("df_prescrizioni_diabete_non_farmaci merged")
 
 df_diagnosi_and_esami_and_prescrioni = pd.concat(
-    [
-        df_diagnosi_and_esami,
-        df_prescrizioni_diabete_farmaci,
-        df_prescirizioni_non_diabete,
-        df_prescrizioni_diabete_non_farmaci,
-    ]
-)
+    objs=(
+        idf.set_index(["idana", "idcentro"])
+        for idf in [
+            df_diagnosi_and_esami,
+            df_prescrizioni_diabete_farmaci,
+            df_prescirizioni_non_diabete,
+            df_prescrizioni_diabete_non_farmaci,
+        ]
+    ),
+    join="inner",
+).reset_index()
+
 print("df_diagnosi_and_esami_and_prescrioni concatenated")
 cont = (
     df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
@@ -834,17 +839,21 @@ cont = (
 print("cont grouped")
 cont_filtered = cont[cont["count"] >= 2]
 
-select = df_diagnosi_and_esami_and_prescrioni.merge(
+select_all_events = df_diagnosi_and_esami_and_prescrioni.merge(
     cont_filtered, on=["idana", "idcentro"], how="inner"
 )
 
-print(select)
+print(select_all_events)
+print(len(select_all_events[["idana", "idcentro"]].drop_duplicates()))
 
-# select["data"] = pd.to_datetime(select["data"], format="%Y-%m-%d")
+# select_all_events["data"] = pd.to_datetime(select_all_events["data"], format="%Y-%m-%d")
 
-last_event = select.groupby(["idana", "idcentro"], group_keys=True)["data"].max()
+last_event = select_all_events.groupby(["idana", "idcentro"], group_keys=True)[
+    "data"
+].max()
 
-print(last_event)
+print("last event:\n", last_event)
+print(last_event.info())
 df_problemi_cuore = df_diagnosi_problemi_cuore.merge(
     patients_keys,
     on=["idana", "idcentro"],
@@ -856,11 +865,19 @@ last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)
     "data"
 ].max()
 
-print(last_problem)
+print("last problem:\n", last_problem)
+print(last_problem.info())
+# this only to empty memory and make work the other code on laptop
+del (
+    df_problemi_cuore,
+    cont,
+    cont_filtered,
+    df_diagnosi_and_esami_and_prescrioni,
+)
 
-wanted_patient = select.join(
+wanted_patient = select_all_events.join(
     (
-        last_problem.reset_index(drop=True).ge(
+        pd.to_datetime(last_problem.reset_index(drop=True), format="%Y-%m-%d").ge(
             pd.to_datetime(
                 last_event.reset_index(drop=True) - pd.Timedelta("180 days"),
                 format="%Y-%m-%d",
@@ -868,11 +885,19 @@ wanted_patient = select.join(
         )
     ).rename("label")
 )
+del last_problem, select_all_events, last_event
+
 print(wanted_patient[["idana", "idcentro", "data", "label"]])
-wanted_patient = wanted_patient[wanted_patient["label"] == True]
+wanted_patient1 = wanted_patient[wanted_patient["label"] == True]
+unwanted_patient = wanted_patient[wanted_patient["label"] == False]
 print("RISULATI PUNTO 1.5")
-print(wanted_patient)
-print(len(wanted_patient))
-patients_keys = wanted_patient[["idana", "idcentro"]].drop_duplicates()
+print(wanted_patient1)
+print(len(wanted_patient1))
+print(len(unwanted_patient))
+patients_keys = wanted_patient1[["idana", "idcentro"]].drop_duplicates()
+patients_keys1 = unwanted_patient[["idana", "idcentro"]].drop_duplicates()
 print(len(patients_keys))
+print(len(patients_keys1))
+
+
 ### TODO: Punto 6
