@@ -275,9 +275,6 @@ def printSexInfo(dataset):
     print("Femmine: ", sum(dataset["sesso"].isin(["F"])))
 
 
-#    dataset['sesso'].plot(kind='kde')
-
-
 def getDeaseasePercentage(dataset, deaseases):
     print("Deasease: ", deaseases)
     # print(dataset.columns)
@@ -375,8 +372,8 @@ print(
 del df_anagrafica_attivi
 
 # TODO: qui si potrebbe pensare di controllare se l'anno di nascita è uguale all' anno decesso e la data (del controllo?)
-# è maggiore dell'anno prio accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
-# eliminare quei dati
+# è maggiore dell'anno primo accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
+# eliminare quei dati (però chi ti dice che è il decesso l'errore e non le visite?)
 
 # print(
 #     "righe da eliminare: ",
@@ -390,8 +387,8 @@ aa_prob_cuore = aa_prob_cuore.drop(
 print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
 
 # TODO: qui si potrebbe pensare di controllare se l'anno di nascita è uguale all' anno decesso e la data (del controllo?)
-# è maggiore dell'anno prio accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
-# eliminare quei dati
+# è maggiore dell'anno primo accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
+# eliminare quei dati (però chi ti dice che è il decesso l'errore e non le visite?)
 
 # print(
 #     "righe da eliminare: ",
@@ -428,8 +425,7 @@ print("All filtered :")
 aa_prob_cuore = aa_prob_cuore.dropna(subset="annodiagnosidiabete")
 print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))  # 49829
 
-
-### TODO Punto 2 per dataset diversi da anagrafica attivi e diagnosi (?)
+### Punto 2 per dataset diversi da anagrafica attivi e diagnosi
 
 ## Carica i dataset
 print("############## LOADING DATASETS ##############")
@@ -457,7 +453,7 @@ print("loaded prescrizioni non diabete")
 del df_list
 
 ## Calcola le chiavi dei pazienti di interesse
-aa_cuore_key = aa_prob_cuore[
+aa_cuore_dates = aa_prob_cuore[
     [
         "idana",
         "idcentro",
@@ -466,8 +462,8 @@ aa_cuore_key = aa_prob_cuore[
         "annodecesso",
     ]
 ]
-aa_cuore_key = aa_cuore_key.drop_duplicates()
-print(len(aa_cuore_key))
+aa_cuore_dates = aa_cuore_dates.drop_duplicates()
+print(len(aa_cuore_dates))
 
 
 ## Cast string to datatime
@@ -477,29 +473,31 @@ def cast_to_datetime(df, col, format="%Y-%m-%d"):
 
 
 for col in ["annonascita", "annoprimoaccesso", "annodecesso"]:
-    aa_cuore_key[col] = cast_to_datetime(aa_cuore_key, col, format="%Y")
-print(aa_cuore_key.head())
-print(aa_cuore_key.info())
+    aa_cuore_dates[col] = cast_to_datetime(aa_cuore_dates, col, format="%Y")
+# print(aa_cuore_dates.head())
+# print(aa_cuore_dates.info())
 
 ## Rimuovi pazienti non di interesse
 print("############## FILTERING DATASETS ##############")
 
-df_esami_par = df_esami_par.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_esami_par = df_esami_par.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
 df_esami_par_cal = df_esami_par_cal.merge(
-    aa_cuore_key, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
-df_esami_stru = df_esami_stru.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
-df_diagnosi = df_diagnosi.merge(aa_cuore_key, on=["idana", "idcentro"], how="inner")
+df_esami_stru = df_esami_stru.merge(
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
+)
+df_diagnosi = df_diagnosi.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    aa_cuore_key, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
-    aa_cuore_key, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    aa_cuore_key, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
-del aa_cuore_key
+del aa_cuore_dates
 
 list_of_df = [
     df_esami_par,
@@ -515,116 +513,39 @@ list_of_df = [
 for df in list_of_df:
     df["data"] = cast_to_datetime(df, "data", format="%Y-%m-%d")
 
-print(df_esami_par.head())
-print(df_esami_par.info())
+# print(df_esami_par.head())
+# print(df_esami_par.info())
 
-# Idk the date in which the dataset was sampled so I have used now.
-df_esami_par = df_esami_par[
-    (df_esami_par["data"] >= df_esami_par["annonascita"])
-    & (df_esami_par["data"] <= df_esami_par["annodecesso"].fillna(pd.Timestamp.now()))
-]
-# appo_1 = df_esami_par[df_esami_par["data"] <= df_esami_par["annodecesso"]]
-# appo_2 = df_esami_par[pd.isnull(df_esami_par["annodecesso"])]
-# df_esami_par = pd.concat([appo_1, appo_2])
 
-# df_esami_par = pd.concat(df_esami_par[df_esami_par["data"] <= df_esami_par["annodecesso"]], df_esami_par[df_esami_par["annodecesso"] == pd.NaT])
+def clean_between_dates(df, col="data", col_start="annonascita", col_end="annodecesso"):
+    # non conosco la data in cui il dataset è stato samplato quindi ho usato il timestamp corrente(adesso) come workaround.
+    df = df[
+        (df[col] >= df[col_start]) & (df[col] <= df[col_end].fillna(pd.Timestamp.now()))
+    ]
+    return df
 
-df_esami_par_cal = df_esami_par_cal[
-    (df_esami_par_cal["data"] >= df_esami_par_cal["annonascita"])
-    & (
-        df_esami_par_cal["data"]
-        <= df_esami_par_cal["annodecesso"].fillna(pd.Timestamp.now())
-    )
-]
-# appo_1 = df_esami_par_cal[df_esami_par_cal["data"] <= df_esami_par_cal["annodecesso"]]
-# appo_2 = df_esami_par_cal[pd.isnull(df_esami_par_cal["annodecesso"])]
-# df_esami_par_cal = pd.concat([appo_1, appo_2])
-# df_esami_par_cal = pd.concat(df_esami_par_cal[df_esami_par_cal["data"] <= df_esami_par_cal["annodecesso"]], df_esami_par_cal[df_esami_par_cal["annodecesso"] == pd.NaT])
 
-df_esami_stru = df_esami_stru[
-    (df_esami_stru["data"] >= df_esami_stru["annonascita"])
-    & (df_esami_stru["data"] <= df_esami_stru["annodecesso"].fillna(pd.Timestamp.now()))
-]
-# appo_1 = df_esami_stru[df_esami_stru["data"] <= df_esami_stru["annodecesso"]]
-# appo_2 = df_esami_stru[pd.isnull(df_esami_stru["annodecesso"])]
-# df_esami_stru = pd.concat([appo_1, appo_2])
-# df_esami_stru = pd.concat([df_esami_stru[df_esami_stru["data"] <= df_esami_stru["annodecesso"]], df_esami_stru[df_esami_stru["annodecesso"] == pd.NaT]])
+df_esami_par = clean_between_dates(df_esami_par)
 
-df_diagnosi = df_diagnosi[
-    (df_diagnosi["data"] >= df_diagnosi["annonascita"])
-    & (df_diagnosi["data"] <= df_diagnosi["annodecesso"].fillna(pd.Timestamp.now()))
-]
-# appo_1 = df_diagnosi[df_diagnosi["data"] <= df_diagnosi["annodecesso"]]
-# appo_2 = df_diagnosi[pd.isnull(df_diagnosi["annodecesso"])]
-# df_diagnosi = pd.concat([appo_1, appo_2])
-# df_diagnosi = pd.concat([df_diagnosi[df_diagnosi["data"] <= df_diagnosi["annodecesso"]], df_diagnosi[df_diagnosi["annodecesso"] == pd.NaT]])
+df_esami_par_cal = clean_between_dates(df_esami_par_cal)
 
-df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci[
-    (
-        df_prescrizioni_diabete_farmaci["data"]
-        >= df_prescrizioni_diabete_farmaci["annonascita"]
-    )
-    & (
-        df_prescrizioni_diabete_farmaci["data"]
-        <= df_prescrizioni_diabete_farmaci["annodecesso"].fillna(pd.Timestamp.now())
-    )
-]
-# appo_1 = df_prescrizioni_diabete_farmaci[
-#     df_prescrizioni_diabete_farmaci["data"]
-#     <= df_prescrizioni_diabete_farmaci["annodecesso"]
-# ]
-# appo_2 = df_prescrizioni_diabete_farmaci[
-#     pd.isnull(df_prescrizioni_diabete_farmaci["annodecesso"])
-# ]
-# df_prescrizioni_diabete_farmaci = pd.concat([appo_1, appo_2])
-# df_prescrizioni_diabete_farmaci = pd.concat([df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["data"] <= df_prescrizioni_diabete_farmaci["annodecesso"]], df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["annodecesso"] == pd.NaT]])
+df_esami_stru = clean_between_dates(df_esami_stru)
 
-df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci[
-    (
-        df_prescrizioni_diabete_non_farmaci["data"]
-        >= df_prescrizioni_diabete_non_farmaci["annonascita"]
-    )
-    & (
-        df_prescrizioni_diabete_non_farmaci["data"]
-        <= df_prescrizioni_diabete_non_farmaci["annodecesso"].fillna(pd.Timestamp.now())
-    )
-]
-# appo_1 = df_prescrizioni_diabete_non_farmaci[
-#     df_prescrizioni_diabete_non_farmaci["data"]
-#     <= df_prescrizioni_diabete_non_farmaci["annodecesso"]
-# ]
-# appo_2 = df_prescrizioni_diabete_non_farmaci[
-#     pd.isnull(df_prescrizioni_diabete_non_farmaci["annodecesso"])
-# ]
-# df_prescrizioni_diabete_non_farmaci = pd.concat([appo_1, appo_2])
-# df_prescrizioni_diabete_non_farmaci = pd.concat([df_prescrizioni_diabete_non_farmaci[df_prescrizioni_diabete_non_farmaci["data"] <= df_prescrizioni_diabete_non_farmaci["annodecesso"]], df_prescrizioni_diabete_non_farmaci[df_prescrizioni_diabete_non_farmaci["annodecesso"] == pd.NaT]])
+df_diagnosi = clean_between_dates(df_diagnosi)
 
-df_prescirizioni_non_diabete = df_prescirizioni_non_diabete[
-    (
-        df_prescirizioni_non_diabete["data"]
-        >= df_prescirizioni_non_diabete["annonascita"]
-    )
-    & (
-        df_prescirizioni_non_diabete["data"]
-        <= df_prescirizioni_non_diabete["annodecesso"].fillna(pd.Timestamp.now())
-    )
-]
-# appo_1 = df_prescirizioni_non_diabete[
-#     df_prescirizioni_non_diabete["data"] <= df_prescirizioni_non_diabete["annodecesso"]
-# ]
-# appo_2 = df_prescirizioni_non_diabete[
-#     pd.isnull(df_prescirizioni_non_diabete["annodecesso"])
-# ]
-# df_prescirizioni_non_diabete = pd.concat([appo_1, appo_2])
+df_prescrizioni_diabete_farmaci = clean_between_dates(df_prescrizioni_diabete_farmaci)
 
-# del appo_1, appo_2
+df_prescrizioni_diabete_non_farmaci = clean_between_dates(
+    df_prescrizioni_diabete_non_farmaci
+)
 
-# df_prescirizioni_non_diabete = pd.concat([df_prescirizioni_non_diabete[df_prescirizioni_non_diabete["data"] <= df_prescirizioni_non_diabete["annodecesso"]], df_prescirizioni_non_diabete[df_prescirizioni_non_diabete["annodecesso"] == pd.NaT]])
-print("Pulite le date")
+df_prescirizioni_non_diabete = clean_between_dates(df_prescirizioni_non_diabete)
+
+print("Pulite le date per il punto 2")
 ### TODO Punto 3
 ## Append datasets
 print("############## POINT 3 START ##############")
-# TODO: verify if the concat is correct the samer as the merge, Aand also if is necessary (because I don't think so)
+# TODO: verify if the concat is correct as the same as merge, and also if is the best way to do this
 df_diagnosi_and_esami = pd.concat(
     objs=(
         idf.set_index(["idana", "idcentro"])
@@ -638,8 +559,8 @@ print(
     "lunghezza df_diagnosi_and_esami: ",
     len(df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()),
 )
-print(df_diagnosi_and_esami.head())
-print(df_diagnosi_and_esami.info())
+# print(df_diagnosi_and_esami.head())
+# print(df_diagnosi_and_esami.info())
 
 groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg(
     {"data": ["min", "max"]}
@@ -654,7 +575,7 @@ groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
 """
 groups_diagnosi_and_esami["data_min"] = groups_diagnosi_and_esami["data"]["min"]
 groups_diagnosi_and_esami["data_max"] = groups_diagnosi_and_esami["data"]["max"]
-print(groups_diagnosi_and_esami.head(30))
+# print(groups_diagnosi_and_esami.head(30))
 print("groups_diagnosi_and_esami")
 
 """
@@ -668,7 +589,7 @@ groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
 groups_diagnosi_and_esami["diff"] = (
     groups_diagnosi_and_esami["data_max"] - groups_diagnosi_and_esami["data_min"]
 )
-print(groups_diagnosi_and_esami.head(30))
+# print(groups_diagnosi_and_esami.head(30))
 print(
     "numero di pazienti con tutte le date in un unico giorno: ",
     len(
@@ -681,13 +602,13 @@ print(
     "numero di pazienti con tutte le date in un unico mese: ",
     len(
         groups_diagnosi_and_esami[
-            groups_diagnosi_and_esami["diff"] < pd.Timedelta("30 days")
+            groups_diagnosi_and_esami["diff"] < pd.Timedelta("31 days")
         ]
     ),
 )
 
 groups_diagnosi_and_esami = groups_diagnosi_and_esami[
-    groups_diagnosi_and_esami["diff"] > pd.Timedelta("30 days")
+    groups_diagnosi_and_esami["diff"] > pd.Timedelta("31 days")
 ]
 groups_diagnosi_and_esami = groups_diagnosi_and_esami.sort_values(by=["diff"])
 print(groups_diagnosi_and_esami.head())
@@ -713,28 +634,19 @@ print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200])
 mask = df_esami_par["codiceamd"] == "AMD004"
 df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(40, 200)
 # would like to use this single line but from documentation it seems that it can cause problems
-# so we must use this in two lines with a precomutation of a mask
+# so we must use this in two lines with a precomputation of a mask
 # df_esami_par["valore"].update(
 #     df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
 # )
 
 mask = df_esami_par["codiceamd"] == "AMD005"
 df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(40, 130)
-# df_esami_par["valore"].update(
-#     df_esami_par[df_esami_par["codiceamd"] == "AMD005"]["valore"].clip(40, 130)
-# )
 
 mask = df_esami_par["codiceamd"] == "AMD007"
 df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(50, 500)
-# df_esami_par["valore"].update(
-#     df_esami_par[df_esami_par["codiceamd"] == "AMD007"]["valore"].clip(50, 500)
-# )
 
 mask = df_esami_par["codiceamd"] == "AMD008"
 df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(5, 15)
-# df_esami_par["valore"].update(
-#     df_esami_par[df_esami_par["codiceamd"] == "AMD008"]["valore"].clip(5, 15)
-# )
 
 print("dopo update: ")
 amd004_dopo = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
@@ -756,6 +668,8 @@ mask = df_esami_par_cal["codicestitch"] == "STITCH002"
 df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
     30, 300
 )
+# would like to use this single line but from documentation it seems that it can cause problems
+# so we must use this in two lines with a precomputation of a mask
 # df_esami_par_cal["valore"].update(
 #     df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"]["valore"].clip(
 #         30, 300
@@ -766,11 +680,6 @@ mask = df_esami_par_cal["codicestitch"] == "STITCH003"
 df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
     60, 330
 )
-# df_esami_par_cal["valore"].update(
-#     df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH003"]["valore"].clip(
-#         60, 330
-#     )
-# )
 
 stitch002_dopo = df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"][
     "valore"
