@@ -820,10 +820,10 @@ df_diagnosi_and_esami_and_prescrioni = pd.concat(
     objs=(
         idf.set_index(["idana", "idcentro"])
         for idf in [
-            df_diagnosi_and_esami,
-            df_prescrizioni_diabete_farmaci,
-            df_prescirizioni_non_diabete,
-            df_prescrizioni_diabete_non_farmaci,
+            df_diagnosi_and_esami[["idcentro", "idana", "data"]],
+            df_prescrizioni_diabete_farmaci[["idcentro", "idana", "data"]],
+            df_prescirizioni_non_diabete[["idcentro", "idana", "data"]],
+            df_prescrizioni_diabete_non_farmaci[["idcentro", "idana", "data"]],
         ]
     ),
     join="inner",
@@ -859,6 +859,18 @@ df_problemi_cuore = df_diagnosi_problemi_cuore.merge(
     on=["idana", "idcentro"],
     how="inner",
 )
+
+print(
+    "num pazienti in all_events: ",
+    len(select_all_events[["idana", "idcentro"]].drop_duplicates()),
+)
+
+print(
+    "df_problemi_cuore: ",
+    len(df_problemi_cuore[["idana", "idcentro"]].drop_duplicates()),
+)
+
+
 df_problemi_cuore["data"] = pd.to_datetime(df_problemi_cuore["data"], format="%Y-%m-%d")
 
 last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)[
@@ -875,19 +887,25 @@ del (
     df_diagnosi_and_esami_and_prescrioni,
 )
 
-wanted_patient = select_all_events.join(
-    (
-        pd.to_datetime(last_problem.reset_index(drop=True), format="%Y-%m-%d").ge(
-            pd.to_datetime(
-                last_event.reset_index(drop=True) - pd.Timedelta("180 days"),
-                format="%Y-%m-%d",
-            )
-        )
-    ).rename("label")
+print("last event: ", last_event)
+print(
+    "minus 6 month: ",
+    pd.to_datetime(
+        last_event - pd.Timedelta("180 days"),
+        format="%Y-%m-%d",
+    ),
 )
-del last_problem, select_all_events, last_event
+
+wanted_patient = select_all_events.join(
+    (last_problem.ge(last_event - pd.DateOffset(months=6))).rename("label"),
+    on=["idana", "idcentro"],
+)
+
+
+del last_problem, select_all_events, last_event, df_diagnosi_and_esami
 
 print(wanted_patient[["idana", "idcentro", "data", "label"]])
+print(len(wanted_patient[["idana", "idcentro"]].drop_duplicates()))
 wanted_patient1 = wanted_patient[wanted_patient["label"] == True]
 unwanted_patient = wanted_patient[wanted_patient["label"] == False]
 print("RISULATI PUNTO 1.5")
