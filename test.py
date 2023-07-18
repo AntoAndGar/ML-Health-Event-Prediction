@@ -604,8 +604,16 @@ print("loaded prescrizioni non diabete")
 del df_list
 
 ## Calcola le chiavi dei pazienti di interesse
-aa_cuore_keys = aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()
-print(len(aa_cuore_keys))
+aa_cuore_dates = aa_prob_cuore[
+    [
+        "idana",
+        "idcentro",
+        "annonascita",
+        "annoprimoaccesso",
+        "annodecesso",
+    ]
+].drop_duplicates()
+print(len(aa_cuore_dates))
 
 
 ## Cast string to datatime
@@ -617,24 +625,61 @@ def cast_to_datetime(df, col, format="%Y-%m-%d"):
 ## Rimuovi pazienti non di interesse
 print("############## FILTERING DATASETS ##############")
 
-df_esami_par = df_esami_par.merge(aa_cuore_keys, on=["idana", "idcentro"], how="inner")
+df_esami_par = df_esami_par.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
+print(
+    "numero pazienti esami par: ",
+    len(df_esami_par[["idana", "idcentro"]].drop_duplicates()),
+)
+
 df_esami_par_cal = df_esami_par_cal.merge(
-    aa_cuore_keys, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
+print(
+    "numero pazienti esami par cal: ",
+    len(df_esami_par_cal[["idana", "idcentro"]].drop_duplicates()),
+)
+
 df_esami_stru = df_esami_stru.merge(
-    aa_cuore_keys, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
-df_diagnosi = df_diagnosi.merge(aa_cuore_keys, on=["idana", "idcentro"], how="inner")
+print(
+    "numero pazienti esami stru: ",
+    len(df_esami_stru[["idana", "idcentro"]].drop_duplicates()),
+)
+
+
+df_diagnosi = df_diagnosi.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
+print(
+    "numero pazienti diagnosi: ",
+    len(df_diagnosi[["idana", "idcentro"]].drop_duplicates()),
+)
+
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    aa_cuore_keys, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
+print(
+    "numero pazienti prescrizioni diabete farmaci: ",
+    len(df_prescrizioni_diabete_farmaci[["idana", "idcentro"]].drop_duplicates()),
+)
+
+
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
-    aa_cuore_keys, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
+print(
+    "numero pazienti prescrizioni diabete non farmaci: ",
+    len(df_prescrizioni_diabete_non_farmaci[["idana", "idcentro"]].drop_duplicates()),
+)
+
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    aa_cuore_keys, on=["idana", "idcentro"], how="inner"
+    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
 )
-del aa_cuore_keys
+print(
+    "numero pazienti prescrizioni non diabete: ",
+    len(df_prescirizioni_non_diabete[["idana", "idcentro"]].drop_duplicates()),
+)
+
+del aa_cuore_dates
 
 list_of_df = [
     df_esami_par,
@@ -693,7 +738,7 @@ df_diagnosi_and_esami = pd.concat(
 ).reset_index()  # 49771
 
 print(
-    "nummero pazienti di interesse inizio punto 3: ",
+    "numero pazienti di interesse inizio punto 3: ",
     len(df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()),
 )
 # print(df_diagnosi_and_esami.head())
@@ -702,30 +747,17 @@ print(
 groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg(
     {"data": ["min", "max"]}
 )
-"""
-groups_diagnosi_and_esami["data_min"] = pd.to_datetime(
-    groups_diagnosi_and_esami["data"]["min"], format="%Y-%m-%d"
-)
-groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
-    groups_diagnosi_and_esami["data"]["max"], format="%Y-%m-%d"
-)
-"""
+
+
 groups_diagnosi_and_esami["data_min"] = groups_diagnosi_and_esami["data"]["min"]
 groups_diagnosi_and_esami["data_max"] = groups_diagnosi_and_esami["data"]["max"]
 # print(groups_diagnosi_and_esami.head(30))
 print("groups_diagnosi_and_esami")
 
-"""
-groups_diagnosi_and_esami["data_min"] = pd.to_datetime(
-    groups_diagnosi_and_esami["data"]["min"], format="%Y-%m-%d"
-)
-groups_diagnosi_and_esami["data_max"] = pd.to_datetime(
-    groups_diagnosi_and_esami["data"]["max"], format="%Y-%m-%d"
-)
-"""
 groups_diagnosi_and_esami["diff"] = (
     groups_diagnosi_and_esami["data_max"] - groups_diagnosi_and_esami["data_min"]
 )
+
 # print(groups_diagnosi_and_esami.head(30))
 print(
     "numero di pazienti con tutte le date in un unico giorno: ",
@@ -745,22 +777,36 @@ print(
 )
 
 groups_diagnosi_and_esami = groups_diagnosi_and_esami[
-    groups_diagnosi_and_esami["diff"] > pd.Timedelta("31 days")
+    groups_diagnosi_and_esami["diff"] >= pd.Timedelta("31 days")
 ]
 groups_diagnosi_and_esami = groups_diagnosi_and_esami.sort_values(by=["diff"])
-print(groups_diagnosi_and_esami.head())
-print(groups_diagnosi_and_esami.tail())
+# print(groups_diagnosi_and_esami.head())
+# print(groups_diagnosi_and_esami.tail())
 print(
     "numero pazienti fine punto 3: ",
     len(groups_diagnosi_and_esami),
 )
 
-### TODO: Punto 4
+# print(groups_diagnosi_and_esami)
+# print(groups_diagnosi_and_esami.info())
+# select only idana and idcentro from groups_diagnosi_and_esami
 
-wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
-wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
-# df esami par
+groups_diagnosi_and_esami_keys = (
+    groups_diagnosi_and_esami.stack()
+    .reset_index()[["idana", "idcentro"]]
+    .drop_duplicates()
+)
+
+del groups_diagnosi_and_esami
+# print(groups_diagnosi_and_esami_keys.head())
+# print(groups_diagnosi_and_esami_keys.info())
+print(len(groups_diagnosi_and_esami_keys))
+
+### Punto 4
 print("############## POINT 4 START ##############")
+
+# wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
+# wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
 
 print("prima update: ")
 amd004 = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
@@ -788,9 +834,10 @@ df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(5, 15)
 print("dopo update: ")
 amd004_dopo = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
 
-print("numero AMD004 minori di 40: ", len(amd004_dopo[amd004_dopo < 40]))
+print("numero AMD004 minori di 40 dopo filtro: ", len(amd004_dopo[amd004_dopo < 40]))
 print(
-    "numero AMD004 maggiori di 200: ", len(amd004_dopo[amd004_dopo.astype(float) > 200])
+    "numero AMD004 maggiori di 200 dopo filtro: ",
+    len(amd004_dopo[amd004_dopo.astype(float) > 200]),
 )
 
 print("prima update: ")
@@ -805,13 +852,6 @@ mask = df_esami_par_cal["codicestitch"] == "STITCH002"
 df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
     30, 300
 )
-# would like to use this single line but from documentation it seems that it can cause problems
-# so we must use this in two lines with a precomputation of a mask
-# df_esami_par_cal["valore"].update(
-#     df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"]["valore"].clip(
-#         30, 300
-#     )
-# )
 
 mask = df_esami_par_cal["codicestitch"] == "STITCH003"
 df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
@@ -824,39 +864,52 @@ stitch002_dopo = df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002
 
 print("dopo update: ")
 print(
-    "numero STITCH001 minori di 30: ",
+    "numero STITCH001 minori di 30 dopo filtro: ",
     len(stitch002_dopo[stitch002_dopo < 30]),
 )
 print(
-    "numero STITCH001 maggiori di 300: ",
+    "numero STITCH001 maggiori di 300 dopo filtro: ",
     len(stitch002_dopo[stitch002_dopo.astype(float) > 300]),
 )
 
-### TODO: Punto 5
+### Punto 5
 print("############## POINT 5 START ##############")
 
-patients_keys = df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()
 aa_prob_cuore_filtered = pd.merge(
     aa_prob_cuore,
-    patients_keys,
+    groups_diagnosi_and_esami_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
-print("aa_prob_cuore_filtered merged")
+
+del groups_diagnosi_and_esami_keys
+
+print(
+    "numero pazienti inizio punto 5: ",
+    len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()),
+)
+
+df_diagnosi_and_esami = df_diagnosi_and_esami.merge(
+    aa_prob_cuore_filtered,
+    on=["idana", "idcentro"],
+    how="inner",
+)
+print("df_diagnosi_and_esami merged")
+
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    patients_keys,
+    aa_prob_cuore_filtered,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescrizioni_diabete_farmaci merged")
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    patients_keys,
+    aa_prob_cuore_filtered,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescirizioni_non_diabete merged")
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
-    patients_keys,
+    aa_prob_cuore_filtered,
     on=["idana", "idcentro"],
     how="inner",
 )
@@ -889,7 +942,7 @@ select_all_events = df_diagnosi_and_esami_and_prescrioni.merge(
     cont_filtered, on=["idana", "idcentro"], how="inner"
 )
 
-print(select_all_events)
+# print(select_all_events)
 print(len(select_all_events[["idana", "idcentro"]].drop_duplicates()))
 
 # select_all_events["data"] = pd.to_datetime(select_all_events["data"], format="%Y-%m-%d")
@@ -898,13 +951,8 @@ last_event = select_all_events.groupby(["idana", "idcentro"], group_keys=True)[
     "data"
 ].max()
 
-print("last event:\n", last_event)
-print(last_event.info())
-df_problemi_cuore = df_diagnosi_problemi_cuore.merge(
-    patients_keys,
-    on=["idana", "idcentro"],
-    how="inner",
-)
+# print("last event:\n", last_event)
+# print(last_event.info())
 
 print(
     "num pazienti in all_events: ",
@@ -913,13 +961,15 @@ print(
 
 print(
     "df_problemi_cuore: ",
-    len(df_problemi_cuore[["idana", "idcentro"]].drop_duplicates()),
+    len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()),
 )
 
 
-df_problemi_cuore["data"] = pd.to_datetime(df_problemi_cuore["data"], format="%Y-%m-%d")
+aa_prob_cuore_filtered["data"] = pd.to_datetime(
+    aa_prob_cuore_filtered["data"], format="%Y-%m-%d"
+)
 
-last_problem = df_problemi_cuore.groupby(["idana", "idcentro"], group_keys=True)[
+last_problem = aa_prob_cuore_filtered.groupby(["idana", "idcentro"], group_keys=True)[
     "data"
 ].max()
 
@@ -927,7 +977,7 @@ print("last problem:\n", last_problem)
 print(last_problem.info())
 # this only to empty memory and make work the other code on laptop
 del (
-    df_problemi_cuore,
+    aa_prob_cuore_filtered,
     cont,
     cont_filtered,
     df_diagnosi_and_esami_and_prescrioni,
@@ -955,7 +1005,7 @@ print(len(wanted_patient[["idana", "idcentro"]].drop_duplicates()))
 wanted_patient1 = wanted_patient[wanted_patient["label"] == True]
 unwanted_patient = wanted_patient[wanted_patient["label"] == False]
 print("RISULATI PUNTO 1.5")
-print(wanted_patient1)
+# print(wanted_patient1)
 print(len(wanted_patient1))
 print(len(unwanted_patient))
 patients_keys = wanted_patient1[["idana", "idcentro"]].drop_duplicates()
