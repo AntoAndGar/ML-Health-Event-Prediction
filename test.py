@@ -614,6 +614,8 @@ aa_cuore_dates = aa_prob_cuore[
     ]
 ].drop_duplicates()
 print(len(aa_cuore_dates))
+print(aa_prob_cuore.head())
+print(aa_prob_cuore.info())
 
 
 ## Cast string to datatime
@@ -875,8 +877,8 @@ print(
 ### Punto 5
 print("############## POINT 5 START ##############")
 
-aa_prob_cuore_filtered = pd.merge(
-    aa_prob_cuore,
+aa_prob_cuore_filtered_keys = pd.merge(
+    aa_prob_cuore[["idana", "idcentro"]].drop_duplicates(),
     groups_diagnosi_and_esami_keys,
     on=["idana", "idcentro"],
     how="inner",
@@ -886,30 +888,30 @@ del groups_diagnosi_and_esami_keys
 
 print(
     "numero pazienti inizio punto 5: ",
-    len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()),
+    len(aa_prob_cuore_filtered_keys[["idana", "idcentro"]].drop_duplicates()),
 )
 
 df_diagnosi_and_esami = df_diagnosi_and_esami.merge(
-    aa_prob_cuore_filtered,
+    aa_prob_cuore_filtered_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_diagnosi_and_esami merged")
 
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    aa_prob_cuore_filtered,
+    aa_prob_cuore_filtered_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescrizioni_diabete_farmaci merged")
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    aa_prob_cuore_filtered,
+    aa_prob_cuore_filtered_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
 print("df_prescirizioni_non_diabete merged")
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
-    aa_prob_cuore_filtered,
+    aa_prob_cuore_filtered_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
@@ -961,9 +963,14 @@ print(
 
 print(
     "df_problemi_cuore: ",
-    len(aa_prob_cuore_filtered[["idana", "idcentro"]].drop_duplicates()),
+    len(aa_prob_cuore_filtered_keys[["idana", "idcentro"]].drop_duplicates()),
 )
 
+aa_prob_cuore_filtered = aa_prob_cuore_filtered_keys.merge(
+    aa_prob_cuore[["idana", "idcentro", "data"]],
+    on=["idana", "idcentro"],
+    how="inner",
+)
 
 aa_prob_cuore_filtered["data"] = pd.to_datetime(
     aa_prob_cuore_filtered["data"], format="%Y-%m-%d"
@@ -981,15 +988,7 @@ del (
     cont,
     cont_filtered,
     df_diagnosi_and_esami_and_prescrioni,
-)
-
-print("last event: ", last_event)
-print(
-    "minus 6 month: ",
-    pd.to_datetime(
-        last_event - pd.Timedelta("180 days"),
-        format="%Y-%m-%d",
-    ),
+    aa_prob_cuore_filtered_keys,
 )
 
 wanted_patient = select_all_events.join(
@@ -997,21 +996,23 @@ wanted_patient = select_all_events.join(
     on=["idana", "idcentro"],
 )
 
-
 del last_problem, select_all_events, last_event, df_diagnosi_and_esami
 
-print(wanted_patient[["idana", "idcentro", "data", "label"]])
-print(len(wanted_patient[["idana", "idcentro"]].drop_duplicates()))
+print("RISULATI PUNTO 1.5")
+# print(wanted_patient[["idana", "idcentro", "data", "label"]])
+print(
+    "pazienti fine punto 5: ",
+    len(wanted_patient[["idana", "idcentro"]].drop_duplicates()),
+)
 wanted_patient1 = wanted_patient[wanted_patient["label"] == True]
 unwanted_patient = wanted_patient[wanted_patient["label"] == False]
-print("RISULATI PUNTO 1.5")
 # print(wanted_patient1)
-print(len(wanted_patient1))
-print(len(unwanted_patient))
-patients_keys = wanted_patient1[["idana", "idcentro"]].drop_duplicates()
-patients_keys1 = unwanted_patient[["idana", "idcentro"]].drop_duplicates()
-print(len(patients_keys))
-print(len(patients_keys1))
+print("True rows patients: ", len(wanted_patient1))
+print("False rows patients: ", len(unwanted_patient))
+print("True patients: ", len(wanted_patient1[["idana", "idcentro"]].drop_duplicates()))
+print(
+    "False patients: ", len(unwanted_patient[["idana", "idcentro"]].drop_duplicates())
+)
 
 
 ### TODO: Punto 6
