@@ -353,6 +353,7 @@ print(
 )  # 365
 
 # fill annodiagnosidiabete with annoprimoaccesso where aa_prob_cuore["annodiagnosidiabete"].isna() & aa_prob_cuore["annoprimoaccesso"].notnull()
+# for POINT 6
 aa_prob_cuore.loc[
     aa_prob_cuore["annodiagnosidiabete"].isna()
     & aa_prob_cuore["annoprimoaccesso"].notnull(),
@@ -562,15 +563,15 @@ print(
     ),
 )  # 15426
 
-aa_prob_cuore.loc[
-    aa_prob_cuore["annodiagnosidiabete"].isna()
-    & aa_prob_cuore["annoprimoaccesso"].notnull(),
-    "annodiagnosidiabete",
-] = aa_prob_cuore.loc[
-    aa_prob_cuore["annodiagnosidiabete"].isna()
-    & aa_prob_cuore["annoprimoaccesso"].notnull(),
-    "annoprimoaccesso",
-]  # già fatto sopra? ops
+# aa_prob_cuore.loc[
+#     aa_prob_cuore["annodiagnosidiabete"].isna()
+#     & aa_prob_cuore["annoprimoaccesso"].notnull(),
+#     "annodiagnosidiabete",
+# ] = aa_prob_cuore.loc[
+#     aa_prob_cuore["annodiagnosidiabete"].isna()
+#     & aa_prob_cuore["annoprimoaccesso"].notnull(),
+#     "annoprimoaccesso",
+# ]  # già fatto sopra? ops
 
 print("All filtered :")
 aa_prob_cuore = aa_prob_cuore.dropna(subset="annodiagnosidiabete")
@@ -614,8 +615,8 @@ aa_cuore_dates = aa_prob_cuore[
     ]
 ].drop_duplicates()
 print(len(aa_cuore_dates))
-print(aa_prob_cuore.head())
-print(aa_prob_cuore.info())
+# print(aa_prob_cuore.head())
+# print(aa_prob_cuore.info())
 
 
 ## Cast string to datatime
@@ -937,16 +938,18 @@ cont = (
     .size()
     .reset_index(name="count")
 )
+# print(cont.sort_values(by=["count"]).head())
+# print(cont.sort_values(by=["count"]).tail())
 print("cont grouped")
 cont_filtered = cont[cont["count"] >= 2]
 
 select_all_events = df_diagnosi_and_esami_and_prescrioni.merge(
-    cont_filtered, on=["idana", "idcentro"], how="inner"
+    cont_filtered.reset_index()[["idana", "idcentro"]],
+    on=["idana", "idcentro"],
+    how="inner",
 )
 
 # print(select_all_events)
-print(len(select_all_events[["idana", "idcentro"]].drop_duplicates()))
-
 # select_all_events["data"] = pd.to_datetime(select_all_events["data"], format="%Y-%m-%d")
 
 last_event = select_all_events.groupby(["idana", "idcentro"], group_keys=True)[
@@ -980,8 +983,9 @@ last_problem = aa_prob_cuore_filtered.groupby(["idana", "idcentro"], group_keys=
     "data"
 ].max()
 
-print("last problem:\n", last_problem)
-print(last_problem.info())
+# print("last problem:\n", last_problem)
+# print(last_problem.info())
+
 # this only to empty memory and make work the other code on laptop
 del (
     aa_prob_cuore_filtered,
@@ -1014,5 +1018,43 @@ print(
     "False patients: ", len(unwanted_patient[["idana", "idcentro"]].drop_duplicates())
 )
 
-
 ### TODO: Punto 6
+# some things for point 6 are done in point 2 and 3 to speed up computations
+print("############## POINT 6 START ##############")
+
+# print(wanted_patient.merge(qualcosa)["sesso"].isna())
+# print(wanted_patient.merge(qualcosa)["annonascita"].isna())
+
+# print(wanted_patient.isna().sum()) # qui tutto ok
+print(df_prescrizioni_diabete_farmaci.isna().sum())
+# qui ci sono 38 righe con codice atc nan da gestire
+# e 250k righe con anno primo accesso nan
+
+print(df_esami_par_cal.isna().sum())
+# qui ci sono 900k righe con codice amd nan
+# e 300k righe con anno primo accesso nan
+
+print(df_esami_par_cal.groupby(["codicestitch"]).size())
+print(
+    df_esami_par_cal[df_esami_par_cal["codiceamd"].isna()]["codicestitch"]
+    .isin(["STITCH003", "STITCH004"])
+    .sum()
+)
+
+print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
+# qui abbiamo un codice amd096 che è presente in sole 38 righe e quindi completamente
+# sbilanciato rispetto agli altri codici amd presenti in grandi quantità, quindi lo scarterei
+# poi due codici amd086 e amd152 riportano la stessa descrizione e quindi li unirei in un unico codice,
+# l'unico problema è che a quel punto la maggioranza dei codici sarebbero l'unione di questo 120k
+# e i rimanenti 25k sarebbero altri due codici, quindi non so se sia il caso di unirli
+
+print(df_prescrizioni_diabete_non_farmaci.isna().sum())
+# qui ci sono 15k righe con valore nan
+# e 15k righe con anno primo accesso nan
+
+print(df_esami_stru.isna().sum())
+# qui ci sono 20k righe con valore a nan
+# e 20k righe con anno primo accesso nan
+
+print(df_esami_stru.groupby(["codiceamd"]).size())
+# alcuni codici amd sono presenti in proporzioni molto maggiori rispetto ad altri
