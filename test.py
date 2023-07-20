@@ -118,6 +118,7 @@ print(
     len(df_diagnosi_problemi_cuore[["idana", "idcentro"]].drop_duplicates()),
 )  # 50000
 
+# punto 6 fatto direttamente qui per alleggerire le computazioni
 print(
     "numero pazienti presenti in diagnosi con codice amd in lista (con problemi al cuore) e con data presente: ",
     len(
@@ -753,10 +754,18 @@ df_prescrizioni_diabete_non_farmaci = clean_between_dates(
 df_prescirizioni_non_diabete = clean_between_dates(df_prescirizioni_non_diabete)
 
 print("Pulite le date per il punto 2")
-### TODO Punto 3
+### Punto 3
 ## Append datasets
 print("############## POINT 3 START ##############")
+# print("diagnosi: ", df_diagnosi.isna().sum())
+# print("esami par: ", df_esami_par.isna().sum())
+# print("esami par cal: ", df_esami_par_cal.isna().sum())
+# print("esami stru: ", df_esami_stru.isna().sum())
+
 # TODO: verify if the concat is correct as the same as merge, and also if is the best way to do this
+# TODO: here we must use also prescrizioni? or only esami and diagnosi? I think for me has more sense to only look
+#  at esami and diagnosi (and also the specific tal about examinations and diagnosis and not about prescrizioni),
+#  but I'm not 100% sure
 df_diagnosi_and_esami = pd.concat(
     objs=(
         idf.set_index(["idana", "idcentro"])
@@ -764,7 +773,9 @@ df_diagnosi_and_esami = pd.concat(
     ),
     # ignore_index=True,
     join="inner",
-).reset_index()  # 49771
+).reset_index()  # 49768
+
+print(len(df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()))
 
 print(
     "numero pazienti di interesse inizio punto 3: ",
@@ -809,8 +820,8 @@ groups_diagnosi_and_esami = groups_diagnosi_and_esami[
     groups_diagnosi_and_esami["diff"] >= pd.Timedelta("31 days")
 ]
 groups_diagnosi_and_esami = groups_diagnosi_and_esami.sort_values(by=["diff"])
-# print(groups_diagnosi_and_esami.head())
-# print(groups_diagnosi_and_esami.tail())
+print("paziente traiettoria minima: ", groups_diagnosi_and_esami.head(1))
+print("paziente traiettoria massima: ", groups_diagnosi_and_esami.tail(1))
 print(
     "numero pazienti fine punto 3: ",
     len(groups_diagnosi_and_esami),
@@ -928,51 +939,56 @@ df_diagnosi_and_esami = df_diagnosi_and_esami.merge(
 )
 print("df_diagnosi_and_esami merged")
 
-df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    aa_prob_cuore_filtered_keys,
-    on=["idana", "idcentro"],
-    how="inner",
-)
-print("df_prescrizioni_diabete_farmaci merged")
-df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    aa_prob_cuore_filtered_keys,
-    on=["idana", "idcentro"],
-    how="inner",
-)
-print("df_prescirizioni_non_diabete merged")
-df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
-    aa_prob_cuore_filtered_keys,
-    on=["idana", "idcentro"],
-    how="inner",
-)
-print("df_prescrizioni_diabete_non_farmaci merged")
+# TODO: a questo punto dato che per il punto 3 non abbiamo usato le prescrizioni, non dobbiamo usarle nemmeno qui le prescrizioni
+#  in quanto no ritengo che siano eventi significativi, quindi qui vanno rivisti i filtri
+# df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
+#     aa_prob_cuore_filtered_keys,
+#     on=["idana", "idcentro"],
+#     how="inner",
+# )
+# print("df_prescrizioni_diabete_farmaci merged")
+# df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
+#     aa_prob_cuore_filtered_keys,
+#     on=["idana", "idcentro"],
+#     how="inner",
+# )
+# print("df_prescirizioni_non_diabete merged")
+# df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
+#     aa_prob_cuore_filtered_keys,
+#     on=["idana", "idcentro"],
+#     how="inner",
+# )
+# print("df_prescrizioni_diabete_non_farmaci merged")
 
-df_diagnosi_and_esami_and_prescrioni = pd.concat(
-    objs=(
-        idf.set_index(["idana", "idcentro"])
-        for idf in [
-            df_diagnosi_and_esami[["idcentro", "idana", "data"]],
-            df_prescrizioni_diabete_farmaci[["idcentro", "idana", "data"]],
-            df_prescirizioni_non_diabete[["idcentro", "idana", "data"]],
-            df_prescrizioni_diabete_non_farmaci[["idcentro", "idana", "data"]],
-        ]
-    ),
-    join="inner",
-).reset_index()
+# df_diagnosi_and_esami_and_prescrioni = pd.concat(
+#     objs=(
+#         idf.set_index(["idana", "idcentro"])
+#         for idf in [
+#             df_diagnosi_and_esami[["idcentro", "idana", "data"]],
+#             df_prescrizioni_diabete_farmaci[["idcentro", "idana", "data"]],
+#             df_prescirizioni_non_diabete[["idcentro", "idana", "data"]],
+#             df_prescrizioni_diabete_non_farmaci[["idcentro", "idana", "data"]],
+#         ]
+#     ),
+#     join="inner",
+# ).reset_index()
 
 print("df_diagnosi_and_esami_and_prescrioni concatenated")
 cont = (
-    df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
+    # df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
+    df_diagnosi_and_esami[["idana", "idcentro"]]
     .groupby(["idana", "idcentro"])
     .size()
     .reset_index(name="count")
 )
-# print(cont.sort_values(by=["count"]).head())
-# print(cont.sort_values(by=["count"]).tail())
+
+print("paziente con minimo numero eventi", cont.sort_values(by=["count"]).head(1))
+print("paziente con massimo numero eventi", cont.sort_values(by=["count"]).tail(1))
 print("cont grouped")
 cont_filtered = cont[cont["count"] >= 2]
 
-select_all_events = df_diagnosi_and_esami_and_prescrioni.merge(
+select_all_events = df_diagnosi_and_esami.merge(
+    # df_diagnosi_and_esami_and_prescrioni.merge(
     cont_filtered.reset_index()[["idana", "idcentro"]],
     on=["idana", "idcentro"],
     how="inner",
@@ -1020,8 +1036,9 @@ del (
     aa_prob_cuore_filtered,
     cont,
     cont_filtered,
-    df_diagnosi_and_esami_and_prescrioni,
+    # df_diagnosi_and_esami_and_prescrioni,
     aa_prob_cuore_filtered_keys,
+    df_diagnosi_and_esami,
 )
 
 wanted_patient = select_all_events.join(
@@ -1029,13 +1046,49 @@ wanted_patient = select_all_events.join(
     on=["idana", "idcentro"],
 )
 
-del last_problem, select_all_events, last_event, df_diagnosi_and_esami
+del last_problem, select_all_events, last_event
+
+# TODO: delete wanted_patient with trajectory less than 6 months
+# I don't understand here someting fishy is going on because I see only 127 days of difference
+# between min and max date but the specification says 6 months
+wanted_patient_6_months = wanted_patient.groupby(["idana", "idcentro"]).agg(
+    {"data": ["min", "max"]}
+)
+
+
+wanted_patient_6_months["data_min"] = wanted_patient_6_months["data"]["min"]
+wanted_patient_6_months["data_max"] = wanted_patient_6_months["data"]["max"]
+
+wanted_patient_6_months["diff"] = (
+    wanted_patient_6_months["data_max"] - wanted_patient_6_months["data_min"]
+)
+
+wanted_patient_6_months = wanted_patient_6_months[
+    wanted_patient_6_months["diff"] >= pd.Timedelta("183 days")
+]
+wanted_patient_6_months = wanted_patient_6_months.sort_values(by=["diff"])
+print("paziente traiettoria minima: ", wanted_patient_6_months.head(1))
+print("paziente traiettoria massima: ", wanted_patient_6_months.tail(1))
+
+wanted_patient_6_months_keys = (
+    wanted_patient_6_months.stack()
+    .reset_index()[["idana", "idcentro"]]
+    .drop_duplicates()
+)
 
 print("RISULATI PUNTO 1.5")
 # print(wanted_patient[["idana", "idcentro", "data", "label"]])
+wanted_patient = wanted_patient.merge(
+    wanted_patient_6_months_keys,
+    on=["idana", "idcentro"],
+    how="inner",
+)
+
+wanted_patient_keys = wanted_patient[["idana", "idcentro"]].drop_duplicates()
+
 print(
     "pazienti fine punto 5: ",
-    len(wanted_patient[["idana", "idcentro"]].drop_duplicates()),
+    len(wanted_patient_keys),
 )
 wanted_patient1 = wanted_patient[wanted_patient["label"] == True]
 unwanted_patient = wanted_patient[wanted_patient["label"] == False]
@@ -1053,10 +1106,19 @@ print("############## POINT 6 START ##############")
 
 # print(wanted_patient.isna().sum()) # qui tutto ok
 
-print(df_prescrizioni_diabete_farmaci.isna().sum())
-# qui ci sono 38 righe con codice atc nan da gestire
-# e 250k righe con anno primo accesso nan
+df_esami_par = df_esami_par.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
 
+print("esami lab parametri: ")
+print(df_esami_par.isna().sum())
+# qui ci sono 30k righe con valore a nan
+# e 800k righe con anno primo accesso nan
+
+df_esami_par_cal = df_esami_par_cal.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print("esami lab parametri calcolati: ")
 print(df_esami_par_cal.isna().sum())
 # qui ci sono 900k righe con codice amd nan
 # e 300k righe con anno primo accesso nan
@@ -1068,20 +1130,44 @@ print(
     .sum()
 )
 
-print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
-# qui abbiamo un codice amd096 che è presente in sole 38 righe e quindi completamente
-# sbilanciato rispetto agli altri codici amd presenti in grandi quantità, quindi lo scarterei
-# poi due codici amd086 e amd152 riportano la stessa descrizione e quindi li unirei in un unico codice,
-# l'unico problema è che a quel punto la maggioranza dei codici sarebbero l'unione di questo 120k
-# e i rimanenti 25k sarebbero altri due codici, quindi non so se sia il caso di unirli
-
-print(df_prescrizioni_diabete_non_farmaci.isna().sum())
-# qui ci sono 15k righe con valore nan
-# e 15k righe con anno primo accesso nan
-
+df_esami_stru = df_esami_stru.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print("esami strumentali: ")
 print(df_esami_stru.isna().sum())
 # qui ci sono 20k righe con valore a nan
 # e 20k righe con anno primo accesso nan
 
 print(df_esami_stru.groupby(["codiceamd"]).size())
 # alcuni codici amd sono presenti in proporzioni molto maggiori rispetto ad altri
+
+print("prscrizioni diabete farmaci: ")
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print(df_prescrizioni_diabete_farmaci.isna().sum())
+# qui ci sono 38 righe con codice atc nan da gestire
+# e 250k righe con anno primo accesso nan
+print(df_prescrizioni_diabete_farmaci.groupby(["codiceatc"]).size())
+
+df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+
+print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
+# qui abbiamo un codice amd096 che è presente in sole 32 righe e quindi completamente
+# sbilanciato rispetto agli altri codici amd presenti in grandi quantità, quindi lo scarterei
+# poi due codici amd086 e amd152 riportano la stessa descrizione e quindi li unirei in un unico codice,
+# l'unico problema è che a quel punto la maggioranza dei codici sarebbero l'unione di questo 120k
+# e i rimanenti 25k sarebbero altri due codici, quindi non so se sia il caso di unirli
+print("prescrizioni diabete non farmaci: ")
+print(df_prescrizioni_diabete_non_farmaci.isna().sum())
+# qui ci sono 15k righe con valore nan
+# e 15k righe con anno primo accesso nan
+
+df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print("prescrizioni non diabete: ")
+print(df_prescirizioni_non_diabete.isna().sum())
+# qui ci sono 250k righe con anno primo accesso nan
