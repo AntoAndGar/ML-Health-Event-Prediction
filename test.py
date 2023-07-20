@@ -98,8 +98,9 @@ print(
 print(
     "numero pazienti in anagrafica presenti in diagnosi:",
     len(
-        pd.merge(
-            df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates(),
+        df_anagrafica_attivi[["idana", "idcentro"]]
+        .drop_duplicates()
+        .merge(
             df_diagnosi[["idana", "idcentro"]].drop_duplicates(),
             how="inner",
             on=["idana", "idcentro"],
@@ -117,14 +118,30 @@ print(
     len(df_diagnosi_problemi_cuore[["idana", "idcentro"]].drop_duplicates()),
 )  # 50000
 
-# anagrafica pazienti con problemi al cuore, e relativa diagnosi
-aa_prob_cuore = pd.merge(
-    df_anagrafica_attivi, df_diagnosi_problemi_cuore, on=["idcentro", "idana"]
+print(
+    "numero pazienti presenti in diagnosi con codice amd in lista (con problemi al cuore) e con data presente: ",
+    len(
+        df_diagnosi_problemi_cuore[~df_diagnosi_problemi_cuore["data"].isna()][
+            ["idana", "idcentro"]
+        ].drop_duplicates()
+    ),
 )
 
-del df_anagrafica_attivi
+# anagrafica pazienti con problemi al cuore, e relativa diagnosi
+aa_prob_cuore = df_anagrafica_attivi.merge(
+    df_diagnosi_problemi_cuore[~df_diagnosi_problemi_cuore["data"].isna()],
+    on=["idcentro", "idana"],
+    how="inner",
+)
 
-print("Valori presenti:", df_diagnosi_problemi_cuore["valore"].unique())
+print(
+    "numero pazienti presenti in anagrafica con problemi al cuore e data presente: ",
+    len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
+)
+
+del df_anagrafica_attivi, df_diagnosi_problemi_cuore
+
+# print("Valori presenti:", df_diagnosi_problemi_cuore["valore"].unique())
 
 ######## PUNTO 2 ########
 print("############## POINT 2 START ##############")
@@ -147,34 +164,39 @@ print(
     ),
 )  # 3 # 0 se seleziono solo quelli con casi rilevanti
 
+# TODO: elimina, siccome non più rilevanti in quanto non presenti tra i pazienti con problemi al cuore
+# aa_prob_cuore = aa_prob_cuore[
+#     aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+#     >= aa_prob_cuore["annonascita"]
+# ]
 
-aa_prob_cuore = aa_prob_cuore[
-    aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
-    >= aa_prob_cuore["annonascita"]
-]
-
-print(
-    "numero pazienti dopo scarto: ",
-    len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
-)
-
-print(
-    "numero righe dopo scarto con anno decesso minore dell'anno di nascita: ",
-    sum(
-        aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
-        < aa_prob_cuore["annonascita"]
-    ),
-)
-
-# questi son 0, commento pervchè non ho voglia di fare il casting a data adesso che ho trasformato le date in datetime
 # print(
-#     "numero pazienti con anno decesso maggiore dell'anno 2022: ",
-#     sum(aa_prob_cuore["annodecesso"] > 2022),
+#     "numero pazienti dopo scarto: ",
+#     len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
 # )
 
 # print(
+#     "numero righe dopo scarto con anno decesso minore dell'anno di nascita: ",
+#     sum(
+#         aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+#         < aa_prob_cuore["annonascita"]
+#     ),
+# )
+
+# questi son 0, commento pervchè non ho voglia di fare il casting a data adesso che ho trasformato le date in datetime
+print(
+    "numero pazienti con anno decesso maggiore dell'anno 2022: ",
+    sum(
+        aa_prob_cuore["annodecesso"] > pd.to_datetime(2023, format="%Y"),
+    ),
+)
+
+# the conversion in datetime don't work for the year 0001 or 0000
+# print(
 #     "numero pazienti con anno di nascita negativo: ",
-#     sum(aa_prob_cuore["annonascita"] < 0),
+#     sum(
+#         aa_prob_cuore["annonascita"] < pd.to_datetime("0001", format="%Y"),
+#     ),
 # )
 
 print(
@@ -194,7 +216,7 @@ print(
         > aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
     ),
 )  # 34 (dopo scarto precedente 33)
-# solo pazienti con eventi cadriovascolari: 14
+# solo pazienti con eventi cardiovascolari: 14
 
 aa_prob_cuore = aa_prob_cuore[
     (
@@ -403,6 +425,10 @@ print(
 )
 
 print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
+
+print(aa_prob_cuore.isna().sum())
+
+# print(aa_prob_cuore[aa_prob_cuore["data"].isna()])
 
 
 def printSexInfo(dataset):
@@ -878,11 +904,14 @@ print(
 ### Punto 5
 print("############## POINT 5 START ##############")
 
-aa_prob_cuore_filtered_keys = pd.merge(
-    aa_prob_cuore[["idana", "idcentro"]].drop_duplicates(),
-    groups_diagnosi_and_esami_keys,
-    on=["idana", "idcentro"],
-    how="inner",
+aa_prob_cuore_filtered_keys = (
+    aa_prob_cuore[["idana", "idcentro"]]
+    .drop_duplicates()
+    .merge(
+        groups_diagnosi_and_esami_keys,
+        on=["idana", "idcentro"],
+        how="inner",
+    )
 )
 
 del groups_diagnosi_and_esami_keys
@@ -1022,10 +1051,8 @@ print(
 # some things for point 6 are done in point 2 and 3 to speed up computations
 print("############## POINT 6 START ##############")
 
-# print(wanted_patient.merge(qualcosa)["sesso"].isna())
-# print(wanted_patient.merge(qualcosa)["annonascita"].isna())
-
 # print(wanted_patient.isna().sum()) # qui tutto ok
+
 print(df_prescrizioni_diabete_farmaci.isna().sum())
 # qui ci sono 38 righe con codice atc nan da gestire
 # e 250k righe con anno primo accesso nan
