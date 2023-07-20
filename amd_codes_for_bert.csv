@@ -1,0 +1,123 @@
+codice,meaning
+AMD090,Diet only
+AMD140,Self control
+AMD215,Number of strips prescribed per week
+AMD228,Integrated management
+AMD086,Self-monitoring of blood glucose
+AMD152,Self-monitoring of blood glucose
+AMD306,Insulin pump
+AMD096,Insulin pump
+AMD037,Mononeuropathy
+AMD038,Polyneuropathy
+AMD039,Autonomic neuropathy
+AMD044,Ischemic heart disease
+AMD045,Heart failure
+AMD046,Angina
+AMD047,Myocardial infarction
+AMD048,Coronary angioplasty
+AMD049,Coronary bypass
+AMD053,Non-proliferative retinopathy
+AMD054,Proliferative retinopathy
+AMD055,Laser-treated diabetic retinopathy
+AMD056,Maculopathy
+AMD057,Severe blindness or low vision
+AMD058,Not diabetic foot
+AMD059,Trophic lesion
+AMD060,Previous ulcer
+AMD061,Major (non-traumatic) amputation
+AMD062,Minor (non-traumatic) amputation
+AMD063,Osteomyelitis / Charcot osteopathy / periostitis
+AMD064,Soft tissue infection
+AMD065,Incipient nephropathy
+AMD066,Overt nephropathy
+AMD067,Chronic renal failure
+AMD068,Dialysis
+AMD069,Nephrotic diabetes syndrome
+AMD070,TIA
+AMD071,"Stroke, unspecified"
+AMD072,Lower limb arteriopathy
+AMD081,Lower limb angioplasty
+AMD082,Peripheral by-pass
+AMD083,Hypertension
+AMD097,Cigarette smoke
+AMD119,Hypertensive retinopathy
+AMD129,Absent diabetic neuropathy
+AMD130,Non diabetic retinopathy
+AMD204,Diabetic retinopathy present of unspecified severity
+AMD205,Diabetes blindness
+AMD206,Blindness from other causes
+AMD207,Gangrene
+AMD208,Revascularization of intracranial vessels and neck
+AMD209,Cerebral vascular disease
+AMD210,Preproliferative retinopathy
+AMD226,Symptomatic non-severe hypoglycemia
+AMD227,Asymptomatic non-severe hypoglycemia
+AMD245,Foot malformations
+AMD257,Non-diabetic nephropathy
+AMD300,Advanced diabetic ophthalmopathy
+AMD302,Not diabetic nephropathy
+AMD303,Ischemic stroke
+AMD307,Hemorrhagic stroke
+AMD247,Other comorbidities
+AMD034,Cardiovascular autonomic tests
+AMD035,EMG (electromyography)
+AMD040,ECG (electrocardiogram)
+AMD041,Echocardiography
+AMD042,Stress test
+AMD043,Coronarography
+AMD050,Eye examination
+AMD051,Retinography
+AMD052,Fluoroangiography
+AMD079,Echocolordoppler lower limbs
+AMD080,Lower limb arteriography
+AMD116,Ecostress
+AMD117,Holter Pressure
+AMD125,Peripheral sensitivity test
+AMD126,ABI (ankle / arm pressure index)
+AMD132,Myocardioscintigraphy
+AMD135,OCT (optical coherence tomography)
+AMD137,Angio RMN lower art
+AMD118,Blood pressure self-control
+AMD001,Height
+AMD002,Weight
+AMD003,Abdominal circumference
+AMD004,PAS (systolic)
+AMD005,PAD (diastolic)
+AMD007,Fasting blood sugar
+AMD008,HbA1c
+AMD305,HbA1c
+AMD009,Creatininemia
+AMD010,Total cholesterol
+AMD011,Triglycerides
+AMD012,HDL cholesterol
+AMD013,LDL cholesterol
+AMD014,Uricemia
+AMD015,GOT
+AMD016,GPT
+AMD017,Amylase
+AMD018,Alkaline phosphatase
+AMD021,Platelets
+AMD022,Hemoglobin
+AMD023,Protein Urine
+AMD024,AER (microalb excretion rate)
+AMD026,A / C Urinary (albumin / creatinine ratio U)
+AMD911,A / C Urinary (albumin / creatinine ratio U)
+AMD028,Creatinine clearance
+AMD109,GT range
+AMD110,CPK
+AMD111,Microalbuminuria
+AMD910,Microalbuminuria
+AMD113,Potassemia
+AMD134,Azotemia
+AMD266,Creatininuria
+AMD304,GFR (CKDEpi)
+AMD912,Ab anti Insulin
+AMD913,Urine albumin
+AMD914,Ab anti GAD 65
+AMD916,Ab anti GAD 65
+AMD915,Ab IA2 / ICA 512
+AMD917,Ab IA2 / ICA 512
+AMD927,BMI
+AMD121,Antihypertensive drugs
+AMD124,Lipid-lowering drugs
+AMD131,Antiplatelet drugs
