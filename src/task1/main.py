@@ -28,7 +28,7 @@ def read_csv(filename):
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
     for name in file_names:
-        df_list[str(name)] = executor.submit(read_csv, f"../../data/{name}.csv")
+        df_list[str(name)] = executor.submit(read_csv, f"data/{name}.csv")
 
 print("############## FUTURES CREATED ##############")
 
@@ -1124,16 +1124,32 @@ df_esami_par_cal = df_esami_par_cal.merge(
 )
 print("esami lab parametri calcolati: ")
 print(df_esami_par_cal.isna().sum())
-# qui ci sono 900k righe con codice amd nan
+# qui ci sono 900k righe con codiceamd nan
 # e 300k righe con anno primo accesso nan
 
 print(df_esami_par_cal.groupby(["codiceamd"]).size())
 print(df_esami_par_cal.groupby(["codicestitch"]).size())
+# una parte dei codiciamd mancanti possono essere fillati in base al valore del codice stitch
+# quindi va fatta un analisi raggruppando per codice stitch e poi per codice amd in modo da
+# vedere quali sono le caratterisitche per il fill dei codici amd mancanti
+# qui sotto si vede che gli 885200 codici amd mancanti hanno tutti codici stitch 003 e 004
 print(
     df_esami_par_cal[df_esami_par_cal["codiceamd"].isna()]["codicestitch"]
     .isin(["STITCH003", "STITCH004"])
     .sum()
 )
+
+# raggruppa per codice stitch e poi per codice amd
+# da qui si vede proprio che i codici stitch e gli amd sono legati da:
+# codicestitch  codiceamd
+# STITCH001     AMD927       969012
+# STITCH002     AMD013       342914
+# STITCH005     AMD304       525186
+# quindi non è possibile fare un fill dei codici amd mancanti in base al codice stitch
+# poiche non ci sono relazioni tra gli stich 003 e 004 e gli amd
+# praticamente gli stitch 003 e 004 sono l'unica informazione utilizzabile piuttosto di amd e stitch insieme
+print(df_esami_par_cal.groupby(["codicestitch", "codiceamd"]).size())
+
 
 df_esami_stru = df_esami_stru.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
@@ -1146,6 +1162,19 @@ print(df_esami_stru.isna().sum())
 print(df_esami_stru.groupby(["codiceamd"]).size())
 # alcuni codici amd sono presenti in proporzioni molto maggiori rispetto ad altri
 
+# ragruppa i codici amd per quantità di nan in valore
+# da qui si vede che i codici amd con valori nan sono solo amd125 con 20k righe e amd126 solo 4
+# quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd126 che è N
+# mentre nel caso del codice amd125 non si può fare un fill in quanto si tratta di fillare metà delle righe e quindi
+# potrebbe portare pi problemi che benefici
+df_esami_stru_nan = (
+    df_esami_stru[df_esami_stru["valore"].isna()]
+    .groupby(["codiceamd"])
+    .size()
+    .sort_values(ascending=False)
+)
+print(df_esami_stru_nan)
+
 print("prescrizioni diabete farmaci: ")
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
@@ -1154,7 +1183,18 @@ print(df_prescrizioni_diabete_farmaci.isna().sum())
 # qui ci sono 38 righe con codice atc nan da gestire
 # e 250k righe con anno primo accesso nan
 print(df_prescrizioni_diabete_farmaci.groupby(["codiceatc"]).size())
+# print(
+#     df_prescrizioni_diabete_farmaci.groupby(["codiceatc", "descrizionefarmaco"]).size()
+# )
+df_prescrizioni_diabete_farmaci_nan = (
+    df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["codiceatc"].isna()]
+    .groupby(["descrizionefarmaco"])
+    .size()
+    .sort_values(ascending=False)
+)
+print(df_prescrizioni_diabete_farmaci_nan)
 
+print("prescrizioni diabete non farmaci: ")
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
@@ -1165,11 +1205,25 @@ print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
 # poi due codici amd086 e amd152 riportano la stessa descrizione e quindi li unirei in un unico codice,
 # l'unico problema è che a quel punto la maggioranza dei codici sarebbero l'unione di questo 120k
 # e i rimanenti 25k sarebbero altri due codici, quindi non so se sia il caso di unirli
-print("prescrizioni diabete non farmaci: ")
 print(df_prescrizioni_diabete_non_farmaci.isna().sum())
 # qui ci sono 15k righe con valore nan
 # e 15k righe con anno primo accesso nan
 print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
+
+# dal seguente si vede che gli unici amd con valori nan sono amd096 e amd152,
+# quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd152 prendendoli
+# dal codice amd086 che riporta la stessa descrizione e quindi valutare se si potrebbe unire amd086 e amd152 in un unico codice
+# mentre anche per questo motivo scarterei amd096
+
+df_prescrizioni_diabete_non_farmaci_nan = (
+    df_prescrizioni_diabete_non_farmaci[
+        df_prescrizioni_diabete_non_farmaci["valore"].isna()
+    ]
+    .groupby(["codiceamd"])
+    .size()
+    .sort_values(ascending=False)
+)
+print(df_prescrizioni_diabete_non_farmaci_nan)
 
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
