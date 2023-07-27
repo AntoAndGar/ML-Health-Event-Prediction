@@ -28,7 +28,7 @@ def read_csv(filename):
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
     for name in file_names:
-        df_list[str(name)] = executor.submit(read_csv, f"../../data/{name}.csv")
+        df_list[str(name)] = executor.submit(read_csv, f"sample/{name}.csv")
 
 print("############## FUTURES CREATED ##############")
 
@@ -1177,3 +1177,5 @@ df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
 print("prescrizioni non diabete: ")
 print(df_prescirizioni_non_diabete.isna().sum())
 # qui ci sono 250k righe con anno primo accesso nan
+
+print(wanted_patient.head())
