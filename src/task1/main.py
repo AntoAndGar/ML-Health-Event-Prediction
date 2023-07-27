@@ -50,7 +50,7 @@ AMD082: Peripheral By-pass Lower Limbs
 AMD208: Revascularization of intracranial and neck vessels
 AMD303: Ischemic stroke
 """
-amd_of_cardiovascular_event = [
+AMD_OF_CARDIOVASCULAR_EVENT = [
     "AMD047",
     "AMD048",
     "AMD049",
@@ -65,7 +65,7 @@ print(
     "numero record presenti in diagnosi: ", len(df_diagnosi[["idana", "idcentro"]])
 )  # 4427337
 print(
-    "numero pazienti unici presenti in diagnosi: ",
+    "numero pazienti presenti in diagnosi prima del punto 1: ",
     len(df_diagnosi[["idana", "idcentro"]].drop_duplicates()),
 )  # 226303
 
@@ -91,7 +91,7 @@ print(
     len(df_anagrafica_attivi[["idana", "idcentro"]]),
 )  # 250000
 print(
-    "numero pazienti unici in anagrafica: ",
+    "numero pazienti presenti in anagrafica prima del punto 1: ",
     len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()),
 )  # 250000
 
@@ -110,7 +110,7 @@ print(
 
 # Diagnosi relative a problemi cardiaci
 df_diagnosi_problemi_cuore = df_diagnosi[
-    df_diagnosi["codiceamd"].isin(amd_of_cardiovascular_event)
+    df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)
 ]
 
 print(
@@ -136,11 +136,11 @@ aa_prob_cuore = df_anagrafica_attivi.merge(
 )
 
 print(
-    "numero pazienti presenti in anagrafica con problemi al cuore e data presente: ",
+    "numero pazienti presenti in anagrafica con problemi al cuore e data presente (dopo punto 1 e con 6): ",
     len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
 )
 
-del df_anagrafica_attivi, df_diagnosi_problemi_cuore
+del df_diagnosi_problemi_cuore
 
 # print("Valori presenti:", df_diagnosi_problemi_cuore["valore"].unique())
 
@@ -506,7 +506,7 @@ printSexInfo(aa_prob_cuore)
 print("Fra i pazienti con problemi al cuore abbiamo:")
 printSexInfo(aa_prob_cuore)
 # Deasease Distribution
-getDeaseasePercentage(aa_prob_cuore, amd_of_cardiovascular_event)
+getDeaseasePercentage(aa_prob_cuore, AMD_OF_CARDIOVASCULAR_EVENT)
 # TODO: qui i numeri non tornano quindi significa che stessi pazienti hanno avuto più codici amd diversi
 # ora vai a capire in ambito medico se significa che hanno più problemi diversi o che hanno avuto diverse diagnosi,
 # che la malattia progredisce e quindi cambia codice amd, bho
@@ -684,20 +684,21 @@ def clean_between_dates(df, col="data", col_start="annonascita", col_end="annode
         (df1[col] >= df1[col_start])
         & (df1[col] <= df1[col_end].fillna(pd.Timestamp.now()))
     ]
-    # this ensure that the patients of interest are the same as the original df filtered only by the keys of the processed patients
+    # this ensure that the columns of patients of interest are the same as the original
+    # df filtered only by the keys of the processed patients
     df = df.merge(
         df1[["idana", "idcentro"]].drop_duplicates(), on=["idana", "idcentro"]
     )
     return df
 
 
+df_diagnosi = clean_between_dates(df_diagnosi)
+
 df_esami_par = clean_between_dates(df_esami_par)
 
 df_esami_par_cal = clean_between_dates(df_esami_par_cal)
 
 df_esami_stru = clean_between_dates(df_esami_stru)
-
-df_diagnosi = clean_between_dates(df_diagnosi)
 
 df_prescrizioni_diabete_farmaci = clean_between_dates(df_prescrizioni_diabete_farmaci)
 
@@ -1066,9 +1067,24 @@ print(
 print("############## POINT 6 START ##############")
 
 # TODO: controllare anagrafica e diagnosi
-print("anagrafica: ")
+print("patients labels: ")
 print(wanted_patient.isna().sum())
 # qui ci sono 456 righe con data a nan
+
+print("anagrafica: ")
+df_anagrafica_attivi = df_anagrafica_attivi.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print(df_anagrafica_attivi.isna().sum())
+
+print("diagnosi: ")
+df_diagnosi = df_diagnosi.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print(df_diagnosi.isna().sum())
+# qui ci sono 456 righe con data a nan
+# qui ci sono 33k righe con valore a nan
+
 
 print("esami lab parametri: ")
 df_esami_par = df_esami_par.merge(
@@ -1189,8 +1205,9 @@ df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.drop(
 )
 
 print("prescrizioni non diabete: ")
+print("no nan")
 # qui non ci sono nan
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
-print(df_prescirizioni_non_diabete.isna().sum())
+# print(df_prescirizioni_non_diabete.isna().sum())
