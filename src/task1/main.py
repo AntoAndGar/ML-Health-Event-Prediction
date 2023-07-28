@@ -551,10 +551,6 @@ aa_prob_cuore = aa_prob_cuore.drop(
 )
 print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
 
-# TODO: qui si potrebbe pensare di controllare se l'anno di nascita è uguale all' anno decesso e la data (del controllo?)
-# è maggiore dell'anno primo accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
-# eliminare quei dati (però chi ti dice che è il decesso l'errore e non le visite?)
-
 # print(
 #     "righe da eliminare: ",
 #     aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]],
@@ -1334,3 +1330,28 @@ df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
 # print(df_prescirizioni_non_diabete.isna().sum())
 
 # TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
+
+# TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
+
+# Check in aa_prob_cuore the nan values from anagraficapazientiattivi
+print("sum of nan values in aa_prob_cuore: ")
+aa_prob_cuore.isna().sum()
+# Show the multiplicity of values in aa_prob_cuore (from anagraficapazientiattivi.csv) of scolarita, statocivile, professione and origine
+print("multiplicity of values in aa_prob_cuore: ")
+aa_prob_cuore.scolarita.value_counts()
+aa_prob_cuore.statocivile.value_counts()
+aa_prob_cuore.professione.value_counts()
+aa_prob_cuore.origine.value_counts()
+
+# Drop the columns that are not useful for the analysis
+aa_prob_cuore.drop(
+    columns=["scolarita", "statocivile", "professione", "origine"], inplace=True
+)
+aa_prob_cuore.describe()
+
+
+# Export the final dataset
+# TODO: check if the merge is correct
+aa_prob_cuore.merge(wanted_patient_keys, on=["idana", "idcentro"], how="inner").to_csv(
+    "data/final_dataset.csv", index=False
+)
