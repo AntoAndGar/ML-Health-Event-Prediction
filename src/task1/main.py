@@ -1210,4 +1210,9 @@ print("no nan")
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
+print("prescrizioni non diabete: ")
+print(df_prescirizioni_non_diabete.isna().sum())
+# qui ci sono 250k righe con anno primo accesso nan
+
+print(wanted_patient.head())
 # print(df_prescirizioni_non_diabete.isna().sum())
