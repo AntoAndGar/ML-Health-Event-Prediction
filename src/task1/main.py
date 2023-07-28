@@ -551,10 +551,6 @@ aa_prob_cuore = aa_prob_cuore.drop(
 )
 print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
 
-# TODO: qui si potrebbe pensare di controllare se l'anno di nascita è uguale all' anno decesso e la data (del controllo?)
-# è maggiore dell'anno primo accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
-# eliminare quei dati (però chi ti dice che è il decesso l'errore e non le visite?)
-
 # print(
 #     "righe da eliminare: ",
 #     aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]],
