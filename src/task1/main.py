@@ -1237,3 +1237,17 @@ df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
 )
 
 # print(df_prescirizioni_non_diabete.isna().sum())
+
+# Check in aa_prob_cuore the nan values from anagraficapazientiattivi
+print("sum of nan values in aa_prob_cuore: ")
+aa_prob_cuore.isna().sum()
+# Show the multiplicity of values in aa_prob_cuore (from anagraficapazientiattivi.csv) of scolarita, statocivile, professione and origine
+print("multiplicity of values in aa_prob_cuore: ")
+aa_prob_cuore.scolarita.value_counts()
+aa_prob_cuore.statocivile.value_counts()
+aa_prob_cuore.professione.value_counts()
+aa_prob_cuore.origine.value_counts()
+
+# Drop the columns that are not useful for the analysis
+aa_prob_cuore.drop(columns=['scolarita', 'statocivile', 'professione', 'origine'], inplace=True)
+aa_prob_cuore.describe()
