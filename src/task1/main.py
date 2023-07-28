@@ -28,7 +28,7 @@ def read_csv(filename):
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
     for name in file_names:
-        df_list[str(name)] = executor.submit(read_csv, f"sample/{name}.csv")
+        df_list[str(name)] = executor.submit(read_csv, f"data/{name}.csv")
 
 print("############## FUTURES CREATED ##############")
 
@@ -50,7 +50,7 @@ AMD082: Peripheral By-pass Lower Limbs
 AMD208: Revascularization of intracranial and neck vessels
 AMD303: Ischemic stroke
 """
-amd_of_cardiovascular_event = [
+AMD_OF_CARDIOVASCULAR_EVENT = [
     "AMD047",
     "AMD048",
     "AMD049",
@@ -65,7 +65,7 @@ print(
     "numero record presenti in diagnosi: ", len(df_diagnosi[["idana", "idcentro"]])
 )  # 4427337
 print(
-    "numero pazienti unici presenti in diagnosi: ",
+    "numero pazienti presenti in diagnosi prima del punto 1: ",
     len(df_diagnosi[["idana", "idcentro"]].drop_duplicates()),
 )  # 226303
 
@@ -91,7 +91,7 @@ print(
     len(df_anagrafica_attivi[["idana", "idcentro"]]),
 )  # 250000
 print(
-    "numero pazienti unici in anagrafica: ",
+    "numero pazienti presenti in anagrafica prima del punto 1: ",
     len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()),
 )  # 250000
 
@@ -110,7 +110,7 @@ print(
 
 # Diagnosi relative a problemi cardiaci
 df_diagnosi_problemi_cuore = df_diagnosi[
-    df_diagnosi["codiceamd"].isin(amd_of_cardiovascular_event)
+    df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)
 ]
 
 print(
@@ -136,11 +136,11 @@ aa_prob_cuore = df_anagrafica_attivi.merge(
 )
 
 print(
-    "numero pazienti presenti in anagrafica con problemi al cuore e data presente: ",
+    "numero pazienti presenti in anagrafica con problemi al cuore e data presente (dopo punto 1 e con 6): ",
     len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
 )
 
-del df_anagrafica_attivi, df_diagnosi_problemi_cuore
+del df_diagnosi_problemi_cuore
 
 # print("Valori presenti:", df_diagnosi_problemi_cuore["valore"].unique())
 
@@ -506,7 +506,7 @@ printSexInfo(aa_prob_cuore)
 print("Fra i pazienti con problemi al cuore abbiamo:")
 printSexInfo(aa_prob_cuore)
 # Deasease Distribution
-getDeaseasePercentage(aa_prob_cuore, amd_of_cardiovascular_event)
+getDeaseasePercentage(aa_prob_cuore, AMD_OF_CARDIOVASCULAR_EVENT)
 # TODO: qui i numeri non tornano quindi significa che stessi pazienti hanno avuto più codici amd diversi
 # ora vai a capire in ambito medico se significa che hanno più problemi diversi o che hanno avuto diverse diagnosi,
 # che la malattia progredisce e quindi cambia codice amd, bho
@@ -654,62 +654,6 @@ def cast_to_datetime(df, col, format="%Y-%m-%d"):
 ## Rimuovi pazienti non di interesse
 print("############## FILTERING DATASETS ##############")
 
-df_esami_par = df_esami_par.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
-print(
-    "numero pazienti esami par: ",
-    len(df_esami_par[["idana", "idcentro"]].drop_duplicates()),
-)
-
-df_esami_par_cal = df_esami_par_cal.merge(
-    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
-)
-print(
-    "numero pazienti esami par cal: ",
-    len(df_esami_par_cal[["idana", "idcentro"]].drop_duplicates()),
-)
-
-df_esami_stru = df_esami_stru.merge(
-    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
-)
-print(
-    "numero pazienti esami stru: ",
-    len(df_esami_stru[["idana", "idcentro"]].drop_duplicates()),
-)
-
-
-df_diagnosi = df_diagnosi.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
-print(
-    "numero pazienti diagnosi: ",
-    len(df_diagnosi[["idana", "idcentro"]].drop_duplicates()),
-)
-
-df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
-    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
-)
-print(
-    "numero pazienti prescrizioni diabete farmaci: ",
-    len(df_prescrizioni_diabete_farmaci[["idana", "idcentro"]].drop_duplicates()),
-)
-
-
-df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
-    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
-)
-print(
-    "numero pazienti prescrizioni diabete non farmaci: ",
-    len(df_prescrizioni_diabete_non_farmaci[["idana", "idcentro"]].drop_duplicates()),
-)
-
-df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
-    aa_cuore_dates, on=["idana", "idcentro"], how="inner"
-)
-print(
-    "numero pazienti prescrizioni non diabete: ",
-    len(df_prescirizioni_non_diabete[["idana", "idcentro"]].drop_duplicates()),
-)
-
-del aa_cuore_dates
-
 list_of_df = [
     df_esami_par,
     df_esami_par_cal,
@@ -729,20 +673,32 @@ for df in list_of_df:
 
 
 def clean_between_dates(df, col="data", col_start="annonascita", col_end="annodecesso"):
+    # this create a temporary df with only the patients of interest
+    df1 = df.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
+    print(
+        "numero pazienti: ",
+        len(df1[["idana", "idcentro"]].drop_duplicates()),
+    )
     # non conosco la data in cui il dataset è stato samplato quindi ho usato il timestamp corrente(adesso) come workaround.
-    df = df[
-        (df[col] >= df[col_start]) & (df[col] <= df[col_end].fillna(pd.Timestamp.now()))
+    df1 = df1[
+        (df1[col] >= df1[col_start])
+        & (df1[col] <= df1[col_end].fillna(pd.Timestamp.now()))
     ]
+    # this ensure that the columns of patients of interest are the same as the original
+    # df filtered only by the keys of the processed patients
+    df = df.merge(
+        df1[["idana", "idcentro"]].drop_duplicates(), on=["idana", "idcentro"]
+    )
     return df
 
+
+df_diagnosi = clean_between_dates(df_diagnosi)
 
 df_esami_par = clean_between_dates(df_esami_par)
 
 df_esami_par_cal = clean_between_dates(df_esami_par_cal)
 
 df_esami_stru = clean_between_dates(df_esami_stru)
-
-df_diagnosi = clean_between_dates(df_diagnosi)
 
 df_prescrizioni_diabete_farmaci = clean_between_dates(df_prescrizioni_diabete_farmaci)
 
@@ -751,6 +707,8 @@ df_prescrizioni_diabete_non_farmaci = clean_between_dates(
 )
 
 df_prescirizioni_non_diabete = clean_between_dates(df_prescirizioni_non_diabete)
+
+del list_of_df, aa_cuore_dates
 
 print("Pulite le date per il punto 2")
 ### Punto 3
@@ -1108,43 +1066,87 @@ print(
 # some things for point 6 are done in point 2 and 3 to speed up computations
 print("############## POINT 6 START ##############")
 
-# print(wanted_patient.isna().sum()) # qui tutto ok
+# TODO: controllare anagrafica e diagnosi
+print("patients labels: ")
+print(wanted_patient.isna().sum())
+# qui ci sono 456 righe con data a nan
 
+print("anagrafica: ")
+df_anagrafica_attivi = df_anagrafica_attivi.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print(df_anagrafica_attivi.isna().sum())
+
+print("diagnosi: ")
+df_diagnosi = df_diagnosi.merge(
+    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+)
+print(df_diagnosi.isna().sum())
+# qui ci sono 456 righe con data a nan
+# qui ci sono 33k righe con valore a nan
+
+
+print("esami lab parametri: ")
 df_esami_par = df_esami_par.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
 
-print("esami lab parametri: ")
 print(df_esami_par.isna().sum())
 # qui ci sono 30k righe con valore a nan
-# e 800k righe con anno primo accesso nan
 
+print("esami lab parametri calcolati: ")
 df_esami_par_cal = df_esami_par_cal.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
-print("esami lab parametri calcolati: ")
 print(df_esami_par_cal.isna().sum())
-# qui ci sono 900k righe con codice amd nan
-# e 300k righe con anno primo accesso nan
+# qui ci sono 900k righe con codiceamd nan
 
 print(df_esami_par_cal.groupby(["codiceamd"]).size())
 print(df_esami_par_cal.groupby(["codicestitch"]).size())
+# una parte dei codiciamd mancanti possono essere fillati in base al valore del codice stitch
+# quindi va fatta un analisi raggruppando per codice stitch e poi per codice amd in modo da
+# vedere quali sono le caratterisitche per il fill dei codici amd mancanti
+# qui sotto si vede che gli 900k codici amd mancanti hanno tutti codici stitch 003 e 004
 print(
     df_esami_par_cal[df_esami_par_cal["codiceamd"].isna()]["codicestitch"]
     .isin(["STITCH003", "STITCH004"])
     .sum()
 )
 
+# raggruppa per codice stitch e poi per codice amd
+# da qui si vede proprio che i codici stitch e gli amd sono legati da:
+# codicestitch  codiceamd
+# STITCH001     AMD927       969012
+# STITCH002     AMD013       342914
+# STITCH005     AMD304       525186
+# quindi non è possibile fare un fill dei codici amd mancanti in base al codice stitch
+# poiche non ci sono relazioni tra gli stich 003 e 004 e gli amd
+# praticamente gli stitch 003 e 004 sono l'unica informazione utilizzabile piuttosto di amd e stitch insieme
+print(df_esami_par_cal.groupby(["codicestitch", "codiceamd"]).size())
+
+
 df_esami_stru = df_esami_stru.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
 print("esami strumentali: ")
 print(df_esami_stru.isna().sum())
-# qui ci sono 20k righe con valore a nan
-# e 20k righe con anno primo accesso nan
+# qui ci sono 21k righe con valore a nan
 
 print(df_esami_stru.groupby(["codiceamd"]).size())
 # alcuni codici amd sono presenti in proporzioni molto maggiori rispetto ad altri
+
+# ragruppando i codici amd per quantità di nan in valore
+# si vede che i codici amd con valori nan sono solo amd125 con 21k righe e amd126 solo 4
+# quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd126 che è N
+# mentre nel caso del codice amd125 non si può fare un fill in quanto si tratta di fillare metà delle righe e quindi
+# potrebbe portare pi problemi che benefici
+df_esami_stru_nan = (
+    df_esami_stru[df_esami_stru["valore"].isna()]
+    .groupby(["codiceamd"])
+    .size()
+    .sort_values(ascending=False)
+)
+print(df_esami_stru_nan)
 
 print("prescrizioni diabete farmaci: ")
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
@@ -1152,9 +1154,19 @@ df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
 )
 print(df_prescrizioni_diabete_farmaci.isna().sum())
 # qui ci sono 38 righe con codice atc nan da gestire
-# e 250k righe con anno primo accesso nan
 print(df_prescrizioni_diabete_farmaci.groupby(["codiceatc"]).size())
+# print(
+#     df_prescrizioni_diabete_farmaci.groupby(["codiceatc", "descrizionefarmaco"]).size()
+# )
+df_prescrizioni_diabete_farmaci_nan = (
+    df_prescrizioni_diabete_farmaci[df_prescrizioni_diabete_farmaci["codiceatc"].isna()]
+    .groupby(["descrizionefarmaco"])
+    .size()
+    .sort_values(ascending=False)
+)
+print(df_prescrizioni_diabete_farmaci_nan)
 
+print("prescrizioni diabete non farmaci: ")
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
@@ -1165,12 +1177,36 @@ print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
 # poi due codici amd086 e amd152 riportano la stessa descrizione e quindi li unirei in un unico codice,
 # l'unico problema è che a quel punto la maggioranza dei codici sarebbero l'unione di questo 120k
 # e i rimanenti 25k sarebbero altri due codici, quindi non so se sia il caso di unirli
-print("prescrizioni diabete non farmaci: ")
 print(df_prescrizioni_diabete_non_farmaci.isna().sum())
 # qui ci sono 15k righe con valore nan
-# e 15k righe con anno primo accesso nan
 print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
 
+# dal seguente si vede che gli unici amd con valori nan sono amd096 e amd152,
+# quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd152 prendendoli
+# dal codice amd086 che riporta la stessa descrizione e quindi valutare se si potrebbe unire amd086 e amd152 in un unico codice
+# mentre anche per questo motivo scarterei amd096
+
+df_prescrizioni_diabete_non_farmaci_nan = (
+    df_prescrizioni_diabete_non_farmaci[
+        df_prescrizioni_diabete_non_farmaci["valore"].isna()
+    ]
+    .groupby(["codiceamd"])
+    .size()
+    .sort_values(ascending=False)
+)
+print(df_prescrizioni_diabete_non_farmaci_nan)
+
+drop_mask = (
+    df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD096"
+) & df_prescrizioni_diabete_non_farmaci["valore"].isna()
+
+df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.drop(
+    df_prescrizioni_diabete_non_farmaci[drop_mask].index
+)
+
+print("prescrizioni non diabete: ")
+print("no nan")
+# qui non ci sono nan
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
@@ -1179,3 +1215,4 @@ print(df_prescirizioni_non_diabete.isna().sum())
 # qui ci sono 250k righe con anno primo accesso nan
 
 print(wanted_patient.head())
+# print(df_prescirizioni_non_diabete.isna().sum())
