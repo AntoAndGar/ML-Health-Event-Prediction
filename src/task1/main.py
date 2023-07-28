@@ -691,22 +691,22 @@ def clean_between_dates(df, col="data", col_start="annonascita", col_end="annode
     )
     return df
 
+for df in list_of_df:
+    df = clean_between_dates(df)
 
-df_diagnosi = clean_between_dates(df_diagnosi)
+#df_diagnosi = clean_between_dates(df_diagnosi)
 
-df_esami_par = clean_between_dates(df_esami_par)
+#df_esami_par = clean_between_dates(df_esami_par)
 
-df_esami_par_cal = clean_between_dates(df_esami_par_cal)
+#df_esami_par_cal = clean_between_dates(df_esami_par_cal)
 
-df_esami_stru = clean_between_dates(df_esami_stru)
+#df_esami_stru = clean_between_dates(df_esami_stru)
 
-df_prescrizioni_diabete_farmaci = clean_between_dates(df_prescrizioni_diabete_farmaci)
+#df_prescrizioni_diabete_farmaci = clean_between_dates(df_prescrizioni_diabete_farmaci)
 
-df_prescrizioni_diabete_non_farmaci = clean_between_dates(
-    df_prescrizioni_diabete_non_farmaci
-)
+#df_prescrizioni_diabete_non_farmaci = clean_between_dates(df_prescrizioni_diabete_non_farmaci)
 
-df_prescirizioni_non_diabete = clean_between_dates(df_prescirizioni_non_diabete)
+#df_prescirizioni_non_diabete = clean_between_dates(df_prescirizioni_non_diabete)
 
 del list_of_df, aa_cuore_dates
 
