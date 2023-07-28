@@ -1073,19 +1073,24 @@ print(
 # some things for point 6 are done in point 2 and 3 to speed up computations
 print("############## POINT 6 START ##############")
 
-# TODO: controllare anagrafica e diagnosi
 print("patients labels: ")
 print(wanted_patient.isna().sum())
 # qui tutto ok
 
 print("anagrafica: ")
+# TODO: qui mi servirebbero le modifiche effettuate nel punto 2 su aa problemi cuore, quindi va rivisto il codice
 df_anagrafica_attivi = df_anagrafica_attivi.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
 print(df_anagrafica_attivi.isna().sum())
-# qui ci sono 350 righe con annodiagnosi diabete a nan, 6,5k righe con annoprimoaccesso a nan
-# e le informazioni demografiche sono spesso mancanti ma possono essere tenute usando un [UNK] in seguito
-# la colonna origine è quasi sempre a nan quindi non è utile e andrebbe eliminata
+# TODO: qui ci sono 350 righe con annodiagnosi diabete a nan le eliminiamo?
+# poi 6,5k righe con annoprimoaccesso a nan e le informazioni demografiche sono
+# spesso mancanti ma possono essere tenute usando un [UNK] in seguito
+
+# delete columns origine because it's almost always nan
+df_anagrafica_attivi = df_anagrafica_attivi.drop(columns=["origine"])
+# delete columns tipodiabete because it's always 5 that means dibete of type 2
+df_anagrafica_attivi = df_anagrafica_attivi.drop(columns=["tipodiabete"])
 
 print("diagnosi: ")
 df_diagnosi = df_diagnosi.merge(
@@ -1102,8 +1107,39 @@ df_diagnosi_nan = (
     .sort_values(ascending=False)
 )
 print(df_diagnosi_nan)
-# TODO: qui dai grafici in plot si capisce che c'è molto da pulire sulla colonna valore che spesso
-# è sparca presentando lo stesso valore ma con numeri interi/decimali con diverse cifre.
+
+# modify the values of the column valore where codiceamd == amd049 to S
+# because imbalanced wrt the other values see below:
+# valore
+# S       36145
+# 36.1      110
+mask = df_diagnosi["codiceamd"] == "AMD049"
+df_diagnosi.loc[mask, "valore"] = "S"
+
+# modify the values of the column valore where codiceamd == amd303 to 434.91
+# because imbalanced wrt the other values see below:
+# valore
+# 434.91    10407
+# 433.01        8
+# 433.11        2
+# 434.01        2
+# 433.21        1
+# 433.91        1
+mask = df_diagnosi["codiceamd"] == "AMD303"
+df_diagnosi.loc[mask, "valore"] = "434.91"
+
+# modify the values of the column valore where codiceamd == amd081 to 39.5
+# because imbalanced wrt the other values see below:
+# valore
+# 39.5     9406
+# 39.50     816
+mask = df_diagnosi["codiceamd"] == "AMD081"
+df_diagnosi.loc[mask, "valore"] = "39.5"
+
+# amd047 and amd071 are unbalanced but not so much so I don't modify them
+
+# I think the values for all the wanted codiceamd are not relevant so I modified them,
+# only because my lack of medical knowledge
 
 print("esami lab parametri: ")
 df_esami_par = df_esami_par.merge(
@@ -1112,18 +1148,31 @@ df_esami_par = df_esami_par.merge(
 
 print(df_esami_par.isna().sum())
 # qui ci sono 30k righe con valore a nan
-df_esami_par_nan = (
-    df_esami_par[df_esami_par["valore"].isna()]
-    .groupby(["codiceamd"])
-    .size()
-    .sort_values(ascending=False)
-)
-print(df_esami_par_nan)
+
+# df_esami_par_nan = (
+#     df_esami_par[df_esami_par["valore"].isna()]
+#     .groupby(["codiceamd"])
+#     .size()
+#     .sort_values(ascending=False)
+# )
+# print(df_esami_par_nan)
 # i seguenti codice amd hanno i rispettivi nan:
 # codiceamd
 # AMD009    28776
 # AMD001     1599
-# TODO qui si possono fillare i 1,6k valori nan di amd001 con il valore medio in quanto rappresenta l'altezza
+
+df_esami_par_temp = df_esami_par.merge(
+    df_anagrafica_attivi[["idana", "idcentro", "sesso"]],
+    on=["idana", "idcentro"],
+    how="inner",
+)
+mask = (df_esami_par["codiceamd"] == "AMD001") & df_esami_par["valore"].isna()
+df_esami_par.loc[mask, "valore"] = df_esami_par_temp.groupby(["sesso"])[
+    "valore"
+].transform(lambda x: x.fillna(x.mean()))
+
+# ora i nan sono solo i 28k degli amd009 per cui non si può effettuare un fill in quanto dati medici
+# print(df_esami_par.isna().sum())
 
 print("esami lab parametri calcolati: ")
 df_esami_par_cal = df_esami_par_cal.merge(
@@ -1151,15 +1200,15 @@ print(
 # STITCH002     AMD013       342914
 # STITCH005     AMD304       525186
 # quindi non è possibile fare un fill dei codici amd mancanti in base al codice stitch
-# poiche non ci sono relazioni tra gli stich 003 e 004 e gli amd
+# poichè non ci sono relazioni tra gli stich 003 e 004 e gli amd
 # praticamente gli stitch 003 e 004 sono l'unica informazione utilizzabile piuttosto di amd e stitch insieme
 print(df_esami_par_cal.groupby(["codicestitch", "codiceamd"]).size())
+# TODO: che si fa si infila lo stitch nell'amd per queste 900k righe o si creano due nuovi amd appositi?
 
-
+print("esami strumentali: ")
 df_esami_stru = df_esami_stru.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
-print("esami strumentali: ")
 print(df_esami_stru.isna().sum())
 # qui ci sono 21k righe con valore a nan
 
@@ -1179,12 +1228,20 @@ df_esami_stru_nan = (
 )
 print(df_esami_stru_nan)
 
+
+# print(df_esami_stru[df_esami_stru["codiceamd"] == "AMD126"]["valore"].value_counts())
+print(df_esami_stru[df_esami_stru["codiceamd"] == "AMD125"]["valore"].value_counts())
+# fill valore for codiceamd == amd126 that are nan with the value most present in the column
+# valore for codiceamd == amd126 that is N
+mask = (df_esami_stru["codiceamd"] == "AMD126") & df_esami_stru["valore"].isna()
+df_esami_stru.loc[mask, "valore"] = "N"
+
 print("prescrizioni diabete farmaci: ")
 df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
 print(df_prescrizioni_diabete_farmaci.isna().sum())
-# qui ci sono 38 righe con codice atc nan da gestire
+# qui ci sono 38 righe con codice atc nan
 print(df_prescrizioni_diabete_farmaci.groupby(["codiceatc"]).size())
 # print(
 #     df_prescrizioni_diabete_farmaci.groupby(["codiceatc", "descrizionefarmaco"]).size()
@@ -1197,6 +1254,36 @@ df_prescrizioni_diabete_farmaci_nan = (
 )
 print(df_prescrizioni_diabete_farmaci_nan)
 
+# siccome le descrizioni dei farmaci dei 38 con codice atc nan sono:
+# descrizionefarmaco
+# Altro               24
+# Ipoglic. orale 1    12
+# 30/70                2
+# possiamo provare a fare un fill dei codici atc nan in base alla descrizione del farmaco
+# vedendo quanli codici atc presentano più volte quelle descrizioni
+# print(
+#     "Altro: ",
+#     df_prescrizioni_diabete_farmaci[
+#         df_prescrizioni_diabete_farmaci["descrizionefarmaco"] == "Altro"
+#     ]["codiceatc"].value_counts(),
+# )
+
+# print(
+#     "Ipoglic. orale 1: ",
+#     df_prescrizioni_diabete_farmaci[
+#         df_prescrizioni_diabete_farmaci["descrizionefarmaco"] == "Ipoglic. orale 1"
+#     ]["codiceatc"].value_counts(),
+# )
+# print(
+#     "30/70: ",
+#     df_prescrizioni_diabete_farmaci[
+#         df_prescrizioni_diabete_farmaci["descrizionefarmaco"] == "30/70"
+#     ]["codiceatc"].value_counts(),
+# )
+# siccome dalla descrizione non è possibile capire quale codiceatc sia associato (nemmeno nel dataset non pulito)
+# in quanto per queste descrizioni non vi è mai un codice atc associato, non è possibile effettuare un fill
+# quindi si potrebbe eliminare queste 38 righe oppure creare 3 codiciatc nuovi
+
 print("prescrizioni diabete non farmaci: ")
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
@@ -1206,14 +1293,12 @@ print(df_prescrizioni_diabete_non_farmaci.isna().sum())
 # qui ci sono 15k righe con valore nan
 print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
 # qui abbiamo un codice amd096 che è presente in sole 32 righe e quindi completamente
-# sbilanciato rispetto agli altri codici amd presenti in grandi quantità, quindi lo scarterei
-# poi due codici amd086 e amd152 riportano la stessa descrizione e quindi li unirei in un unico codice,
-# l'unico problema è che a quel punto la maggioranza dei codici sarebbero l'unione di questo 120k
-# e i rimanenti 25k sarebbero altri due codici, quindi non so se sia il caso di unirli
+# sbilanciato rispetto agli altri codici amd presenti in grandi quantità, quindi lo scarterei,
+# poi due codici amd086 e amd152 riportano la stessa descrizione ma differente valore e quindi
+# non sono unibili in un unico codice (086 ha S/N e 152 un codice ministeriale).
 
-# dal seguente si vede che gli unici amd con valori nan sono amd096 e amd152,
+# TODO: dal seguente codice si vede che gli unici amd con valori nan sono amd096 e amd152,
 # quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd152 prendendoli
-# dal codice amd086 che riporta la stessa descrizione e quindi valutare se si potrebbe unire amd086 e amd152 in un unico codice
 # mentre anche per questo motivo scarterei amd096
 df_prescrizioni_diabete_non_farmaci_nan = (
     df_prescrizioni_diabete_non_farmaci[
@@ -1232,6 +1317,12 @@ drop_mask = (
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.drop(
     df_prescrizioni_diabete_non_farmaci[drop_mask].index
 )
+# TODO: count the number of patients with amd152 and the respective values and then assign
+# the most frequents values to the nan values with a probabilistic approach where the probability
+# of a value is the number of times that value appears in the dataset divided by the total number of values
+
+print("dopo drop: ")
+print(df_prescrizioni_diabete_non_farmaci.isna().sum())
 
 print("prescrizioni non diabete: ")
 print("no nan")
@@ -1241,3 +1332,5 @@ df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
 )
 
 # print(df_prescirizioni_non_diabete.isna().sum())
+
+# TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
