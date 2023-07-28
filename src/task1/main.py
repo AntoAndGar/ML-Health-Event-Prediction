@@ -1251,3 +1251,9 @@ aa_prob_cuore.origine.value_counts()
 # Drop the columns that are not useful for the analysis
 aa_prob_cuore.drop(columns=['scolarita', 'statocivile', 'professione', 'origine'], inplace=True)
 aa_prob_cuore.describe()
+
+
+# Export the final dataset
+# TODO: check if the merge is correct
+aa_prob_cuore.merge(wanted_patient_keys, on=["idana", "idcentro"], how="inner").to_csv(
+    "data/final_dataset.csv", index=False)
