@@ -15,7 +15,4 @@ df_anagrafica   = pd.read_csv(read_data_path+'/anagraficapazientiattivi_c.csv', 
 #df_pre_no_diab  = pd.read_csv(read_data_path+'/prescrizioninondiabete_c.csv', header=0 ,names=['idcentro','idana','data','codiceamd','valore'])
 
 ### Point 2.1 ####
-df_anagrafica_w0 = df_anagrafica[df_anagrafica.label == 0]
-print(f"ap_class0 has size => {df_anagrafica_w0.shape}")
-df_anagrafica_w1 = df_anagrafica[df_anagrafica.label == 1]
-print(f"ap_class1 has size => {df_anagrafica_w1.shape}")
+print(df_anagrafica.label.value_counts())
