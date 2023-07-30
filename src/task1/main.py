@@ -2,6 +2,7 @@ import pandas as pd
 from datetime import date
 import concurrent.futures as futures
 import multiprocessing
+import numpy as np
 
 # from multiprocessing import Pool
 
@@ -165,25 +166,6 @@ print(
     ),
 )  # 3 # 0 se seleziono solo quelli con casi rilevanti
 
-# TODO: elimina, siccome non più rilevanti in quanto non presenti tra i pazienti con problemi al cuore
-# aa_prob_cuore = aa_prob_cuore[
-#     aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
-#     >= aa_prob_cuore["annonascita"]
-# ]
-
-# print(
-#     "numero pazienti dopo scarto: ",
-#     len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
-# )
-
-# print(
-#     "numero righe dopo scarto con anno decesso minore dell'anno di nascita: ",
-#     sum(
-#         aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
-#         < aa_prob_cuore["annonascita"]
-#     ),
-# )
-
 print(
     "numero pazienti con anno decesso maggiore dell'anno 2022: ",
     sum(
@@ -285,7 +267,7 @@ print(
         ][["idana", "idcentro"]]
     ),
 )  # 1797
-# TODO con questa info si potrebbe fillare l'annodiagnosidiabete con l'annoprimoaccesso
+# con questa info abbiamo deciso di riempire l'annodiagnosidiabete con l'annoprimoaccesso
 
 # print("info dataframe pazienti con problemi al cuore: ")
 # print(aa_prob_cuore.info())
@@ -534,10 +516,10 @@ print(
     ),
 )
 
-# TODO: qui si potrebbe calcolare anche qual'è la percentuale in base al sesso e casomai anche per età
+# TODO: qui si potrebbe calcolare anche qual è la percentuale in base al sesso e casomai anche per età
 
-# TODO: qui si potrebbe pensare di controllare se l'anno di nascita è uguale all' anno decesso e la data (del controllo?)
-# è maggiore dell'anno primo accesso e di diagnosi del diabete di settare a nan l'anno di decesso in modo da non dover
+# TODO: qui si potrebbe pensare di controllare se l'anno di nascita è uguale all' anno decesso e se la data (del controllo?)
+# è maggiore dell'anno primo accesso e di diagnosi del diabete e di settare a nan l'anno di decesso in modo da non dover
 # eliminare quei dati (però chi ti dice che è il decesso l'errore e non le visite?)
 
 # print(
@@ -724,7 +706,7 @@ print("############## POINT 3 START ##############")
 
 # TODO: verify if the concat is correct as the same as merge, and also if is the best way to do this
 # TODO: here we must use also prescrizioni? or only esami and diagnosi? I think for me has more sense to only look
-#  at esami and diagnosi (and also the specific tal about examinations and diagnosis and not about prescrizioni),
+#  at esami and diagnosi (and also the specific talk about examinations and diagnosis and not about prescrizioni),
 #  but I'm not 100% sure
 df_diagnosi_and_esami = pd.concat(
     objs=(
@@ -938,7 +920,7 @@ print("df_diagnosi_and_esami merged")
 #     join="inner",
 # ).reset_index()
 
-print("df_diagnosi_and_esami_and_prescrioni concatenated")
+print("df_diagnosi_and_esami concatenated")
 cont = (
     # df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
     df_diagnosi_and_esami[["idana", "idcentro"]]
@@ -1013,13 +995,10 @@ wanted_patient = select_all_events.join(
 
 del last_problem, select_all_events, last_event
 
-# TODO: delete wanted_patient with trajectory less than 6 months
-# I don't understand here someting fishy is going on because I see only 127 days of difference
-# between min and max date but the specification says 6 months
+# delete wanted_patient with trajectory less than 6 months
 wanted_patient_6_months = wanted_patient.groupby(["idana", "idcentro"]).agg(
     {"data": ["min", "max"]}
 )
-
 
 wanted_patient_6_months["data_min"] = wanted_patient_6_months["data"]["min"]
 wanted_patient_6_months["data_max"] = wanted_patient_6_months["data"]["max"]
@@ -1065,7 +1044,7 @@ print(
     "False patients: ", len(unwanted_patient[["idana", "idcentro"]].drop_duplicates())
 )
 
-### TODO: Punto 6
+### Point 6
 # some things for point 6 are done in point 2 and 3 to speed up computations
 print("############## POINT 6 START ##############")
 
@@ -1080,6 +1059,7 @@ df_anagrafica_attivi = df_anagrafica_attivi.merge(
 )
 print(df_anagrafica_attivi.isna().sum())
 # TODO: qui ci sono 350 righe con annodiagnosi diabete a nan le eliminiamo?
+# oppure ci teniamo pazienti che non sappiamo quando gli è stato diagnosticato il diabete?
 # poi 6,5k righe con annoprimoaccesso a nan e le informazioni demografiche sono
 # spesso mancanti ma possono essere tenute usando un [UNK] in seguito
 
@@ -1313,61 +1293,115 @@ drop_mask = (
 df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.drop(
     df_prescrizioni_diabete_non_farmaci[drop_mask].index
 )
-# TODO: count the number of patients with amd152 and the respective values and then assign
-# the most frequents values to the nan values with a probabilistic approach where the probability
-# of a value is the number of times that value appears in the dataset divided by the total number of values
+
+# print(
+#     "AMD152: ",
+#     df_prescrizioni_diabete_non_farmaci[
+#         df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD152"
+#     ]["valore"].value_counts(),
+# )
+
+# count the number of patient with amd152 whose valore is not nan
+count152 = df_prescrizioni_diabete_non_farmaci[
+    (df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD152")
+    & (~df_prescrizioni_diabete_non_farmaci["valore"].isna())
+].shape[0]
+
+# count the number of patients with amd152 and the respective values and create a dict
+count152_dict = (
+    df_prescrizioni_diabete_non_farmaci[
+        (df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD152")
+        & (~df_prescrizioni_diabete_non_farmaci["valore"].isna())
+    ]["valore"]
+    .value_counts()
+    .to_dict()
+)
+
+# for each value in the dict compute the probability of that value
+for key in count152_dict:
+    count152_dict[key] = count152_dict[key] / count152
+
+# print(count152_dict)
+
+# for each nan value in the column valore and with codiceamd equal to amd152 assign a value
+# with a probabilistic approach where the probability of a value is the number of times that value
+# appears in the dataset divided by the total number of values
+df_prescrizioni_diabete_non_farmaci.loc[
+    (df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD152")
+    & (df_prescrizioni_diabete_non_farmaci["valore"].isna()),
+    "valore",
+] = np.random.choice(
+    list(count152_dict.keys()),
+    size=df_prescrizioni_diabete_non_farmaci[
+        (df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD152")
+        & (df_prescrizioni_diabete_non_farmaci["valore"].isna())
+    ].shape[0],
+    p=list(count152_dict.values()),
+)
 
 print("dopo drop: ")
 print(df_prescrizioni_diabete_non_farmaci.isna().sum())
 
 print("prescrizioni non diabete: ")
-print("no nan")
 # qui non ci sono nan
 df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
 
-# print(df_prescirizioni_non_diabete.isna().sum())
-
-# TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
+print(df_prescirizioni_non_diabete.isna().sum())
+print("no nan")
 
 # TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
 
 # Check in aa_prob_cuore the nan values from anagraficapazientiattivi
-print("sum of nan values in aa_prob_cuore: ")
-aa_prob_cuore.isna().sum()
-# Show the multiplicity of values in aa_prob_cuore (from anagraficapazientiattivi.csv) of scolarita, statocivile, professione and origine
-print("multiplicity of values in aa_prob_cuore: ")
-aa_prob_cuore.scolarita.value_counts()
-aa_prob_cuore.statocivile.value_counts()
-aa_prob_cuore.professione.value_counts()
-aa_prob_cuore.origine.value_counts()
+# print("sum of nan values in aa_prob_cuore: ")
+# aa_prob_cuore.isna().sum()
+# # Show the multiplicity of values in aa_prob_cuore (from anagraficapazientiattivi.csv) of scolarita, statocivile, professione and origine
+# print("multiplicity of values in aa_prob_cuore: ")
+# aa_prob_cuore.scolarita.value_counts()
+# aa_prob_cuore.statocivile.value_counts()
+# aa_prob_cuore.professione.value_counts()
+# aa_prob_cuore.origine.value_counts()
 
-# Drop the columns that are not useful for the analysis
-aa_prob_cuore.drop(
-    columns=["scolarita", "statocivile", "professione", "origine"], inplace=True
-)
-aa_prob_cuore.describe()
+# # Drop the columns that are not useful for the analysis
+# aa_prob_cuore.drop(
+#     columns=["scolarita", "statocivile", "professione", "origine"], inplace=True
+# )
+# aa_prob_cuore.describe()
 
-# EXPORT THE CLEANED DATASETS
-# Cleaned datasets are exported in the folder clean_data to be used in the next tasks.
-# This  operation can take many minutes.
-# TODO: check if the dataset are correctly exported
-print("Exporting the cleaned datasets...")
-# TOFIX: wanted patient does not contain anagrafica information like 'datanascita', 'sesso' and 'datadecesso'
-wanted_patient.to_csv("clean_data/anagraficapazientiattivi_c.csv", index=False) # Anagrafica
-print("anagraficapazientiattivi_c.csv exported (1/8)")
-aa_prob_cuore.to_csv("clean_data/diagnosi_c.csv", index=False) # Diagnosi
-print("diagnosi.csv exported (2/8)")
-df_esami_par.to_csv("clean_data/esamilaboratorioparametri_c.csv", index=False) # Esami Laboratorio Parametri
-print("esamilaboratorioparametri_c.csv exported (3/8)")
-df_esami_par_cal.to_csv("clean_data/esamilaboratorioparametricalcolati_c.csv", index=False) # Esami Laboratorio Parametri Calcolati
-print("esamilaboratorioparametricalcolati_c.csv exported (4/8)")
-df_esami_stru.to_csv("clean_data/esamistrumentali_c.csv", index=False) # Esami Strumentali
-print("esamistrumentali_c.csv exported (5/8)")
-df_prescrizioni_diabete_farmaci.to_csv("clean_data/prescrizionidiabetefarmaci_c.csv", index=False) # Prescrizioni Diabete Farmaci
-print("prescrizionidiabetefarmaci_c.csv exported (6/8)")
-df_prescrizioni_diabete_non_farmaci.to_csv("clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False) # Prescrizioni Diabete Non Farmaci
-print("prescrizionidiabetenonfarmaci_c.csv exported (7/8)")
-df_prescirizioni_non_diabete.to_csv("clean_data/prescrizioninondiabete_c.csv", index=False) # Prescrizioni Non Diabete
-print("Exporting completed!")
+# # EXPORT THE CLEANED DATASETS
+# # Cleaned datasets are exported in the folder clean_data to be used in the next tasks.
+# # This  operation can take many minutes.
+# # TODO: check if the dataset are correctly exported
+# print("Exporting the cleaned datasets...")
+# # TOFIX: wanted patient does not contain anagrafica information like 'datanascita', 'sesso' and 'datadecesso'
+# wanted_patient.to_csv(
+#     "clean_data/anagraficapazientiattivi_c.csv", index=False
+# )  # Anagrafica
+# print("anagraficapazientiattivi_c.csv exported (1/8)")
+# aa_prob_cuore.to_csv("clean_data/diagnosi_c.csv", index=False)  # Diagnosi
+# print("diagnosi.csv exported (2/8)")
+# df_esami_par.to_csv(
+#     "clean_data/esamilaboratorioparametri_c.csv", index=False
+# )  # Esami Laboratorio Parametri
+# print("esamilaboratorioparametri_c.csv exported (3/8)")
+# df_esami_par_cal.to_csv(
+#     "clean_data/esamilaboratorioparametricalcolati_c.csv", index=False
+# )  # Esami Laboratorio Parametri Calcolati
+# print("esamilaboratorioparametricalcolati_c.csv exported (4/8)")
+# df_esami_stru.to_csv(
+#     "clean_data/esamistrumentali_c.csv", index=False
+# )  # Esami Strumentali
+# print("esamistrumentali_c.csv exported (5/8)")
+# df_prescrizioni_diabete_farmaci.to_csv(
+#     "clean_data/prescrizionidiabetefarmaci_c.csv", index=False
+# )  # Prescrizioni Diabete Farmaci
+# print("prescrizionidiabetefarmaci_c.csv exported (6/8)")
+# df_prescrizioni_diabete_non_farmaci.to_csv(
+#     "clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False
+# )  # Prescrizioni Diabete Non Farmaci
+# print("prescrizionidiabetenonfarmaci_c.csv exported (7/8)")
+# df_prescirizioni_non_diabete.to_csv(
+#     "clean_data/prescrizioninondiabete_c.csv", index=False
+# )  # Prescrizioni Non Diabete
+# print("Exporting completed!")
