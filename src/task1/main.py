@@ -1050,6 +1050,7 @@ wanted_patient = wanted_patient.merge(
 )
 
 wanted_patient_keys = wanted_patient[["idana", "idcentro"]].drop_duplicates()
+wanted_patient_keys_with_label = wanted_patient[["idana", "idcentro", "label"]].drop_duplicates()
 
 print(
     "pazienti fine punto 5: ",
@@ -1076,7 +1077,7 @@ print(wanted_patient.isna().sum())
 print("anagrafica: ")
 # TODO: qui mi servirebbero le modifiche effettuate nel punto 2 su aa problemi cuore, quindi va rivisto il codice
 df_anagrafica_attivi = df_anagrafica_attivi.merge(
-    wanted_patient_keys, on=["idana", "idcentro"], how="inner"
+    wanted_patient_keys_with_label, on=["idana", "idcentro"], how="inner"
 )
 print(df_anagrafica_attivi.isna().sum())
 # TODO: qui ci sono 350 righe con annodiagnosi diabete a nan le eliminiamo?
@@ -1333,21 +1334,20 @@ df_prescirizioni_non_diabete = df_prescirizioni_non_diabete.merge(
 
 # TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
 
-# Check in aa_prob_cuore the nan values from anagraficapazientiattivi
-print("sum of nan values in aa_prob_cuore: ")
-aa_prob_cuore.isna().sum()
-# Show the multiplicity of values in aa_prob_cuore (from anagraficapazientiattivi.csv) of scolarita, statocivile, professione and origine
-print("multiplicity of values in aa_prob_cuore: ")
-aa_prob_cuore.scolarita.value_counts()
-aa_prob_cuore.statocivile.value_counts()
-aa_prob_cuore.professione.value_counts()
-aa_prob_cuore.origine.value_counts()
+# Check in df_anagrafica_attivi the nan values from anagraficapazientiattivi
+print("sum of nan values in df_anagrafica_attivi: ")
+df_anagrafica_attivi.isna().sum()
+# Show the multiplicity of values in df_anagrafica_attivi (from anagraficapazientiattivi.csv) of scolarita, statocivile, professione and origine
+print("multiplicity of values in df_anagrafica_attivi: ")
+df_anagrafica_attivi.scolarita.value_counts()
+df_anagrafica_attivi.statocivile.value_counts()
+df_anagrafica_attivi.professione.value_counts()
 
 # Drop the columns that are not useful for the analysis
-aa_prob_cuore.drop(
-    columns=["scolarita", "statocivile", "professione", "origine"], inplace=True
+df_anagrafica_attivi.drop(
+    columns=["scolarita", "statocivile", "professione"], inplace=True
 )
-aa_prob_cuore.describe()
+df_anagrafica_attivi.describe()
 
 # EXPORT THE CLEANED DATASETS
 # Cleaned datasets are exported in the folder clean_data to be used in the next tasks.
@@ -1355,9 +1355,9 @@ aa_prob_cuore.describe()
 # TODO: check if the dataset are correctly exported
 print("Exporting the cleaned datasets...")
 # TOFIX: wanted patient does not contain anagrafica information like 'datanascita', 'sesso' and 'datadecesso'
-wanted_patient.to_csv("clean_data/anagraficapazientiattivi_c.csv", index=False) # Anagrafica
+df_anagrafica_attivi.to_csv("clean_data/anagraficapazientiattivi_c.csv", index=False) # Anagrafica
 print("anagraficapazientiattivi_c.csv exported (1/8)")
-aa_prob_cuore.to_csv("clean_data/diagnosi_c.csv", index=False) # Diagnosi
+df_diagnosi.to_csv("clean_data/diagnosi_c.csv", index=False) # Diagnosi
 print("diagnosi.csv exported (2/8)")
 df_esami_par.to_csv("clean_data/esamilaboratorioparametri_c.csv", index=False) # Esami Laboratorio Parametri
 print("esamilaboratorioparametri_c.csv exported (3/8)")
