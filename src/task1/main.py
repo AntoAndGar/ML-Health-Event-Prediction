@@ -1349,9 +1349,25 @@ aa_prob_cuore.drop(
 )
 aa_prob_cuore.describe()
 
-
-# Export the final dataset
-# TODO: check if the merge is correct
-aa_prob_cuore.merge(wanted_patient_keys, on=["idana", "idcentro"], how="inner").to_csv(
-    "data/final_dataset.csv", index=False
-)
+# EXPORT THE CLEANED DATASETS
+# Cleaned datasets are exported in the folder clean_data to be used in the next tasks.
+# This  operation can take many minutes.
+# TODO: check if the dataset are correctly exported
+print("Exporting the cleaned datasets...")
+# TOFIX: wanted patient does not contain anagrafica information like 'datanascita', 'sesso' and 'datadecesso'
+wanted_patient.to_csv("clean_data/anagraficapazientiattivi_c.csv", index=False) # Anagrafica
+print("anagraficapazientiattivi_c.csv exported (1/8)")
+aa_prob_cuore.to_csv("clean_data/diagnosi_c.csv", index=False) # Diagnosi
+print("diagnosi.csv exported (2/8)")
+df_esami_par.to_csv("clean_data/esamilaboratorioparametri_c.csv", index=False) # Esami Laboratorio Parametri
+print("esamilaboratorioparametri_c.csv exported (3/8)")
+df_esami_par_cal.to_csv("clean_data/esamilaboratorioparametricalcolati_c.csv", index=False) # Esami Laboratorio Parametri Calcolati
+print("esamilaboratorioparametricalcolati_c.csv exported (4/8)")
+df_esami_stru.to_csv("clean_data/esamistrumentali_c.csv", index=False) # Esami Strumentali
+print("esamistrumentali_c.csv exported (5/8)")
+df_prescrizioni_diabete_farmaci.to_csv("clean_data/prescrizionidiabetefarmaci_c.csv", index=False) # Prescrizioni Diabete Farmaci
+print("prescrizionidiabetefarmaci_c.csv exported (6/8)")
+df_prescrizioni_diabete_non_farmaci.to_csv("clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False) # Prescrizioni Diabete Non Farmaci
+print("prescrizionidiabetenonfarmaci_c.csv exported (7/8)")
+df_prescirizioni_non_diabete.to_csv("clean_data/prescrizioninondiabete_c.csv", index=False) # Prescrizioni Non Diabete
+print("Exporting completed!")
