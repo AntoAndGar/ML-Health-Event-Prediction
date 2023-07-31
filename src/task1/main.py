@@ -119,14 +119,14 @@ print(
     len(df_diagnosi_problemi_cuore[["idana", "idcentro"]].drop_duplicates()),
 )  # 50000
 
+df_diagnosi_problemi_cuore_keys = df_diagnosi_problemi_cuore[
+    ~df_diagnosi_problemi_cuore["data"].isna()
+][["idana", "idcentro"]].drop_duplicates()
+
 # punto 6 fatto direttamente qui per alleggerire le computazioni
 print(
     "numero pazienti presenti in diagnosi con codice amd in lista (con problemi al cuore) e con data presente: ",
-    len(
-        df_diagnosi_problemi_cuore[~df_diagnosi_problemi_cuore["data"].isna()][
-            ["idana", "idcentro"]
-        ].drop_duplicates()
-    ),
+    len(df_diagnosi_problemi_cuore_keys),
 )
 
 # anagrafica pazienti con problemi al cuore, e relativa diagnosi
@@ -141,7 +141,12 @@ print(
     len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
 )
 
-del df_diagnosi_problemi_cuore
+# modified anagrafica to have only patients with cardiovascular problemss
+df_anagrafica_attivi = df_anagrafica_attivi.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+del df_diagnosi_problemi_cuore, df_diagnosi_problemi_cuore_keys
 
 # print("Valori presenti:", df_diagnosi_problemi_cuore["valore"].unique())
 
@@ -150,26 +155,26 @@ print("############## POINT 2 START ##############")
 
 print(
     "numero righe con anno diagnosi diabete minore dell'anno di nascita: ",
-    sum(aa_prob_cuore["annodiagnosidiabete"] < aa_prob_cuore["annonascita"]),
+    sum(df_anagrafica_attivi["annodiagnosidiabete"] < df_anagrafica_attivi["annonascita"]),
 )  # 0
 
 print(
     "numero righe con anno primo accesso minore dell'anno di nascita: ",
-    sum(aa_prob_cuore["annoprimoaccesso"] < aa_prob_cuore["annonascita"]),
+    sum(df_anagrafica_attivi["annoprimoaccesso"] < df_anagrafica_attivi["annonascita"]),
 )  # 0
 
 print(
     "numero righe con anno decesso minore dell'anno di nascita: ",
     sum(
-        aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
-        < aa_prob_cuore["annonascita"]
+        df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
+        < df_anagrafica_attivi["annonascita"]
     ),
 )  # 3 # 0 se seleziono solo quelli con casi rilevanti
 
 print(
     "numero pazienti con anno decesso maggiore dell'anno 2022: ",
     sum(
-        aa_prob_cuore["annodecesso"] > pd.to_datetime(2023, format="%Y"),
+        df_anagrafica_attivi["annodecesso"] > pd.to_datetime(2023, format="%Y"),
     ),
 )  # 0
 
@@ -177,128 +182,128 @@ print(
 # print(
 #     "numero pazienti con anno di nascita negativo: ",
 #     sum(
-#         aa_prob_cuore["annonascita"] < pd.to_datetime("0001", format="%Y"),
+#         df_anagrafica_attivi["annonascita"] < pd.to_datetime("0001", format="%Y"),
 #     ),
 # )
 
 print(
     "numero righe con anno primo accesso a N/A: ",
-    sum(aa_prob_cuore["annoprimoaccesso"].isna()),
+    sum(df_anagrafica_attivi["annoprimoaccesso"].isna()),
 )  # 25571
 
 print(
     "numero righe con anno diagnosi diabete a N/A: ",
-    sum(aa_prob_cuore["annodiagnosidiabete"].isna()),
+    sum(df_anagrafica_attivi["annodiagnosidiabete"].isna()),
 )  # 2234
 
 print(
     "numero righe con anno primo accesso maggiore dell'anno decesso: ",
     sum(
-        aa_prob_cuore["annoprimoaccesso"]
-        > aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+        df_anagrafica_attivi["annoprimoaccesso"]
+        > df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     ),
 )  # 34 (dopo scarto precedente 33)
 # solo pazienti con eventi cardiovascolari: 14
 
-aa_prob_cuore = aa_prob_cuore[
+df_anagrafica_attivi = df_anagrafica_attivi[
     (
-        aa_prob_cuore["annoprimoaccesso"]
-        <= aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+        df_anagrafica_attivi["annoprimoaccesso"]
+        <= df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     )
-    | (aa_prob_cuore["annoprimoaccesso"].isna())
+    | (df_anagrafica_attivi["annoprimoaccesso"].isna())
 ]
 
 print(
     "numero righe dopo scarto con anno primo accesso maggiore dell'anno decesso: ",
     sum(
-        aa_prob_cuore["annoprimoaccesso"]
-        > aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+        df_anagrafica_attivi["annoprimoaccesso"]
+        > df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     ),
 )
 
 print(
     "numero pazienti dopo scarto: ",
-    len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
+    len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()),
 )
 
-# print("tipi possibili di diabete: ", aa_prob_cuore["tipodiabete"].unique())
+# print("tipi possibili di diabete: ", df_anagrafica_attivi["tipodiabete"].unique())
 # in anagrafica abbiamo solo pazienti con diagnosi di diabete di tipo 2 valore 5 in 'tipodiabete'
 # quindi possiamo fillare l'annodiagnosidiabete con l'annoprimoaccesso
 
 # visto che il tipo diabete è sempre lo stesso si può eliminare la colonna dal df per risparmiare memoria
-aa_prob_cuore.drop(columns=["tipodiabete"], inplace=True)
+df_anagrafica_attivi.drop(columns=["tipodiabete"], inplace=True)
 
 print(
     "numero righe con anno diagnosi diabete maggiore dell'anno decesso: ",
     sum(
-        aa_prob_cuore["annodiagnosidiabete"]
-        > aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        > df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     ),
 )  # 22 (dopo scarto precedente 2)
 # 14 solo paziente con eventi cadriovascolari
 
-aa_prob_cuore = aa_prob_cuore[
+df_anagrafica_attivi = df_anagrafica_attivi[
     (
-        aa_prob_cuore["annodiagnosidiabete"]
-        <= aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        <= df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     )
-    | aa_prob_cuore["annodiagnosidiabete"].isna()
+    | df_anagrafica_attivi["annodiagnosidiabete"].isna()
 ]
 
 print(
     "numero righe dopo scarto con anno diagnosi diabete maggiore dell'anno decesso: ",
     sum(
-        aa_prob_cuore["annodiagnosidiabete"]
-        > aa_prob_cuore["annodecesso"].fillna(pd.Timestamp.now())
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        > df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     ),
 )
 
 print(
     "numero pazienti dopo scarto: ",
-    len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
+    len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()),
 )
 
 print(
     "numero righe con anno diagnosi diabete a N/A, ma che hanno l'anno di primo accesso: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"].isna()
-            & aa_prob_cuore["annoprimoaccesso"].notnull()
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"].isna()
+            & df_anagrafica_attivi["annoprimoaccesso"].notnull()
         ][["idana", "idcentro"]]
     ),
 )  # 1797
 # con questa info abbiamo deciso di riempire l'annodiagnosidiabete con l'annoprimoaccesso
 
 # print("info dataframe pazienti con problemi al cuore: ")
-# print(aa_prob_cuore.info())
+# print(df_anagrafica_attivi.info())
 
 # questi son tutti a 0
 print(
     "numero righe anno diagnosi diabete minore anno di nascita: ",
-    sum(aa_prob_cuore["annodiagnosidiabete"] < aa_prob_cuore["annonascita"]),
+    sum(df_anagrafica_attivi["annodiagnosidiabete"] < df_anagrafica_attivi["annonascita"]),
 )  # 0
 print(
     "numero righe anno primo accesso minore anno di nascita: ",
-    sum(aa_prob_cuore["annoprimoaccesso"] < aa_prob_cuore["annonascita"]),
+    sum(df_anagrafica_attivi["annoprimoaccesso"] < df_anagrafica_attivi["annonascita"]),
 )  # 0
 print(
     "numero righe anno decesso minore anno di nascita: ",
-    sum(aa_prob_cuore["annodecesso"] < aa_prob_cuore["annonascita"]),
+    sum(df_anagrafica_attivi["annodecesso"] < df_anagrafica_attivi["annonascita"]),
 )  # 0
-# print(sum(aa_prob_cuore["annodecesso"] > 2022))  # 0
-# print(sum(aa_prob_cuore["annonascita"] < 0))  # 0
+# print(sum(df_anagrafica_attivi["annodecesso"] > 2022))  # 0
+# print(sum(df_anagrafica_attivi["annonascita"] < 0))  # 0
 
 # 7 pazienti hanno la data di primo accesso maggiore della data di decesso -> da scartare
 # i 7 non sono presenti tra i pazienti con eventi cardiovascolari
 print(
     "numero righe con data di primo accesso maggiore della data di decesso: ",
-    sum(aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]),
+    sum(df_anagrafica_attivi["annoprimoaccesso"] > df_anagrafica_attivi["annodecesso"]),
 )  # 14 righe di cui 7 unici # 0 tra i pazienti con eventi cardiovascolari
 
 print(
     "numero pazienti unici con data di primo accesso maggiore della data di decesso: ",
     len(
-        aa_prob_cuore[aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]][
+        df_anagrafica_attivi[df_anagrafica_attivi["annoprimoaccesso"] > df_anagrafica_attivi["annodecesso"]][
             ["idana", "idcentro"]
         ].drop_duplicates()
     ),
@@ -308,27 +313,27 @@ print(
 # i 5 non sono presenti tra i pazienti con eventi cardiovascolari
 print(
     "numero righe con data di diagnosi di diabete maggiore della data di decesso: ",
-    sum(aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]),
+    sum(df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]),
 )  # 9 righe di cui 5 unici # 0 tra i pazienti con eventi cardiovascolari
 
 print(
     "numero pazienti unici con data di diagnosi di diabete maggiore della data di decesso: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )
 
 print(
     "numero righe con anno diagnosi diabete a N/A: ",
-    sum(aa_prob_cuore["annodiagnosidiabete"].isna()),
+    sum(df_anagrafica_attivi["annodiagnosidiabete"].isna()),
 )  # 2234
 
 print(
     "numero pazienti unici con anno diagnosi diabete a N/A: ",
     len(
-        aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"].isna()][
+        df_anagrafica_attivi[df_anagrafica_attivi["annodiagnosidiabete"].isna()][
             ["idana", "idcentro"]
         ].drop_duplicates()
     ),
@@ -339,9 +344,9 @@ print(
 print(
     "numero righe con anno diagnosi diabete a N/A ma con anno primo accesso presente: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"].isna()
-            & aa_prob_cuore["annoprimoaccesso"].notnull()
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"].isna()
+            & df_anagrafica_attivi["annoprimoaccesso"].notnull()
         ][["idana", "idcentro"]]
     ),
 )  # 1797
@@ -349,44 +354,44 @@ print(
 print(
     "numero pazienti unici con anno diagnosi diabete a N/A ma con anno primo accesso presente: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"].isna()
-            & aa_prob_cuore["annoprimoaccesso"].notnull()
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"].isna()
+            & df_anagrafica_attivi["annoprimoaccesso"].notnull()
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )  # 365
 
-# fill annodiagnosidiabete with annoprimoaccesso where aa_prob_cuore["annodiagnosidiabete"].isna() & aa_prob_cuore["annoprimoaccesso"].notnull()
+# fill annodiagnosidiabete with annoprimoaccesso where df_anagrafica_attivi["annodiagnosidiabete"].isna() & df_anagrafica_attivi["annoprimoaccesso"].notnull()
 # for POINT 6
-aa_prob_cuore.loc[
-    aa_prob_cuore["annodiagnosidiabete"].isna()
-    & aa_prob_cuore["annoprimoaccesso"].notnull(),
+df_anagrafica_attivi.loc[
+    df_anagrafica_attivi["annodiagnosidiabete"].isna()
+    & df_anagrafica_attivi["annoprimoaccesso"].notnull(),
     "annodiagnosidiabete",
-] = aa_prob_cuore.loc[
-    aa_prob_cuore["annodiagnosidiabete"].isna()
-    & aa_prob_cuore["annoprimoaccesso"].notnull(),
+] = df_anagrafica_attivi.loc[
+    df_anagrafica_attivi["annodiagnosidiabete"].isna()
+    & df_anagrafica_attivi["annoprimoaccesso"].notnull(),
     "annoprimoaccesso",
 ]
 
 print(
     "numero pazienti unici dopo fill con anno diagnosi diabete a N/A ma con anno primo accesso presente: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"].isna()
-            & aa_prob_cuore["annoprimoaccesso"].notnull()
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"].isna()
+            & df_anagrafica_attivi["annoprimoaccesso"].notnull()
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )
 
 print(
     "numero righe dopo fill con anno diagnosi diabete a N/A: ",
-    sum(aa_prob_cuore["annodiagnosidiabete"].isna()),
+    sum(df_anagrafica_attivi["annodiagnosidiabete"].isna()),
 )  # 437
 
 print(
     "numero pazienti unici dopo fill con anno diagnosi diabete a N/A: ",
     len(
-        aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"].isna()][
+        df_anagrafica_attivi[df_anagrafica_attivi["annodiagnosidiabete"].isna()][
             ["idana", "idcentro"]
         ].drop_duplicates()
     ),
@@ -394,21 +399,21 @@ print(
 
 print(
     "numero righe dopo fill con anno primo accesso a N/A: ",
-    sum(aa_prob_cuore["annoprimoaccesso"].isna()),
+    sum(df_anagrafica_attivi["annoprimoaccesso"].isna()),
 )  #
 
 print(
     "numero pazienti unici dopo fill con anno primo accesso a N/A: ",
     len(
-        aa_prob_cuore[aa_prob_cuore["annoprimoaccesso"].isna()][
+        df_anagrafica_attivi[df_anagrafica_attivi["annoprimoaccesso"].isna()][
             ["idana", "idcentro"]
         ].drop_duplicates()
     ),
 )
 
-print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
+print(len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()))
 
-print(aa_prob_cuore.isna().sum())
+print(df_anagrafica_attivi.isna().sum())
 
 # print(aa_prob_cuore[aa_prob_cuore["data"].isna()])
 
@@ -423,98 +428,95 @@ def printSexInfo(dataset):
     print("Maschi: ", sum(dataset["sesso"].isin(["M"])))
     print("Femmine: ", sum(dataset["sesso"].isin(["F"])))
 
+# this can't work here with new change must go on point 1.3
+# def getDeaseasePercentage(dataset, deaseases):
+#     print("Deasease: ", deaseases)
+#     # print(dataset.columns)
+#     percent = "Percentage of deasease:\n"
+#     dataset = dataset[["idcentro", "idana", "codiceamd"]].drop_duplicates()
+#     print("numero righe del df: ", len(dataset))
 
-def getDeaseasePercentage(dataset, deaseases):
-    print("Deasease: ", deaseases)
-    # print(dataset.columns)
-    percent = "Percentage of deasease:\n"
-    dataset = dataset[["idcentro", "idana", "codiceamd"]].drop_duplicates()
-    print("numero righe del df: ", len(dataset))
+#     for deasease in deaseases:
+#         # print("Deasease: ", deasease)
+#         tempdataset = dataset[dataset["codiceamd"].isin([deasease])]
+#         tempdataset2 = tempdataset[["idana", "idcentro"]].drop_duplicates()
+#         total = len(dataset[["idana", "idcentro"]].drop_duplicates())
+#         percent += (
+#             deasease
+#             + ": "
+#             + str(len(tempdataset2) / total * 100)
+#             + "%\t"
+#             + str(len(tempdataset2))
+#             + " su "
+#             + str(total)
+#             + "\n"
+#         )
+#     print(percent)
 
-    for deasease in deaseases:
-        # print("Deasease: ", deasease)
-        tempdataset = dataset[dataset["codiceamd"].isin([deasease])]
-        tempdataset2 = tempdataset[["idana", "idcentro"]].drop_duplicates()
-        total = len(dataset[["idana", "idcentro"]].drop_duplicates())
-        percent += (
-            deasease
-            + ": "
-            + str(len(tempdataset2) / total * 100)
-            + "%\t"
-            + str(len(tempdataset2))
-            + " su "
-            + str(total)
-            + "\n"
-        )
-    print(percent)
+# def getInfoOnDiagnosi(df):
+#     print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+#     print("Info on diagnosi")
+#     print(
+#         "il dizionario stampato è formattato così: 'chiave': [minori, uguali, maggiori] rispetto a data"
+#     )
+#     dates = ["annodiagnosidiabete", "annonascita", "annoprimoaccesso", "annodecesso"]
+#     stampami = dict()
+#     df = df[
+#         [
+#             "idcentro",
+#             "idana",
+#             "annodiagnosidiabete",
+#             "annonascita",
+#             "annoprimoaccesso",
+#             "annodecesso",
+#             "data",
+#         ]
+#     ].drop_duplicates()
 
+#     print("numero righe del df: ", len(df))
 
-def getInfoOnDiagnosi(df):
-    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-    print("Info on diagnosi")
-    print(
-        "il dizionario stampato è formattato così: 'chiave': [minori, uguali, maggiori] rispetto a data"
-    )
-    dates = ["annodiagnosidiabete", "annonascita", "annoprimoaccesso", "annodecesso"]
-    stampami = dict()
-    df = df[
-        [
-            "idcentro",
-            "idana",
-            "annodiagnosidiabete",
-            "annonascita",
-            "annoprimoaccesso",
-            "annodecesso",
-            "data",
-        ]
-    ].drop_duplicates()
+#     for d in dates:
+#         # where the nan values goes? they are counted as what? minor or major?
+#         minor = (df[d] < df["data"]).sum()
+#         equal = (df[d] == df["data"]).sum()
+#         more = (df[d] > df["data"]).sum()
+#         stampami[d] = [minor, equal, more]
 
-    print("numero righe del df: ", len(df))
-
-    for d in dates:
-        # where the nan values goes? they are counted as what? minor or major?
-        minor = (df[d] < df["data"]).sum()
-        equal = (df[d] == df["data"]).sum()
-        more = (df[d] > df["data"]).sum()
-        stampami[d] = [minor, equal, more]
-
-    print(stampami)
+#     print(stampami)
 
 
-getInfoOnDiagnosi(aa_prob_cuore)
+# getInfoOnDiagnosi(aa_prob_cuore)
 # Sesso
-print("In anagrafica attivi abbiamo:")
-printSexInfo(aa_prob_cuore)
 print("Fra i pazienti con problemi al cuore abbiamo:")
-printSexInfo(aa_prob_cuore)
+printSexInfo(df_anagrafica_attivi)
 # Deasease Distribution
-getDeaseasePercentage(aa_prob_cuore, AMD_OF_CARDIOVASCULAR_EVENT)
+#getDeaseasePercentage(aa_prob_cuore, AMD_OF_CARDIOVASCULAR_EVENT)
 # TODO: qui i numeri non tornano quindi significa che stessi pazienti hanno avuto più codici amd diversi
 # ora vai a capire in ambito medico se significa che hanno più problemi diversi o che hanno avuto diverse diagnosi,
 # che la malattia progredisce e quindi cambia codice amd, bho
 # provo a capire quali sono i pazienti che hanno avuto più codici amd diversi:
-print(
-    "numero pazienti con più codici amd diversi: ",
-    len(
-        aa_prob_cuore[aa_prob_cuore[["idana", "idcentro"]].duplicated(keep=False)][
-            ["idana", "idcentro"]
-        ].drop_duplicates()
-    ),
-)
+# print(
+#     "numero pazienti con più codici amd diversi: ",
+#     len(
+#         aa_prob_cuore[aa_prob_cuore[["idana", "idcentro"]].duplicated(keep=False)][
+#             ["idana", "idcentro"]
+#         ].drop_duplicates()
+#     ),
+# )
 
 # print(
 #     "pazienti con più codici amd diversi: ",
 #     aa_prob_cuore[aa_prob_cuore[["idana", "idcentro"]].duplicated(keep=False)][["idana", "idcentro"]].drop_duplicates(),
 # )
 
-print(
-    "numero pazienti con un unico codice amd: ",
-    len(
-        aa_prob_cuore[~aa_prob_cuore[["idana", "idcentro"]].duplicated(keep=False)][
-            ["idana", "idcentro"]
-        ].drop_duplicates()
-    ),
-)
+# print(
+#     "numero pazienti con un unico codice amd: ",
+#     len(
+#         aa_prob_cuore[~aa_prob_cuore[["idana", "idcentro"]].duplicated(keep=False)][
+#             ["idana", "idcentro"]
+#         ].drop_duplicates()
+#     ),
+# )
 
 # TODO: qui si potrebbe calcolare anche qual è la percentuale in base al sesso e casomai anche per età
 
@@ -524,27 +526,27 @@ print(
 
 # print(
 #     "righe da eliminare: ",
-#     aa_prob_cuore[aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]],
+#     df_anagrafica_attivi[df_anagrafica_attivi["annoprimoaccesso"] > df_anagrafica_attivi["annodecesso"]],
 # )
-aa_prob_cuore = aa_prob_cuore.drop(
-    aa_prob_cuore[
-        aa_prob_cuore["annoprimoaccesso"] > aa_prob_cuore["annodecesso"]
+df_anagrafica_attivi = df_anagrafica_attivi.drop(
+    df_anagrafica_attivi[
+        df_anagrafica_attivi["annoprimoaccesso"] > df_anagrafica_attivi["annodecesso"]
     ].index,
 )
-print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
+print(len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()))
 
 # print(
 #     "righe da eliminare: ",
-#     aa_prob_cuore[aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]],
+#     df_anagrafica_attivi[df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]],
 # )
-aa_prob_cuore = aa_prob_cuore.drop(
-    aa_prob_cuore[
-        aa_prob_cuore["annodiagnosidiabete"] > aa_prob_cuore["annodecesso"]
+df_anagrafica_attivi = df_anagrafica_attivi.drop(
+    df_anagrafica_attivi[
+        df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]
     ].index,
 )  # già fatto sopra? ops
 
 print("dopo scarto :")
-print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
+print(len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()))
 
 # siccome più della metà dei pazienti che hanno problemi al cuore
 # hanno l'anno di diagnosi di diabete minore dell'anno di primo accesso
@@ -552,8 +554,8 @@ print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))
 print(
     "numero pazienti unici con anno diagnosi diabete minore dell'anno primo accesso: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"] < aa_prob_cuore["annoprimoaccesso"]
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"] < df_anagrafica_attivi["annoprimoaccesso"]
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )  # 27592
@@ -561,25 +563,25 @@ print(
 print(
     "numero pazienti unici con anno diagnosi diabete maggiore dell'anno primo accesso: ",
     len(
-        aa_prob_cuore[
-            aa_prob_cuore["annodiagnosidiabete"] >= aa_prob_cuore["annoprimoaccesso"]
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annodiagnosidiabete"] >= df_anagrafica_attivi["annoprimoaccesso"]
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )  # 15426
 
-# aa_prob_cuore.loc[
-#     aa_prob_cuore["annodiagnosidiabete"].isna()
-#     & aa_prob_cuore["annoprimoaccesso"].notnull(),
+# df_anagrafica_attivi.loc[
+#     df_anagrafica_attivi["annodiagnosidiabete"].isna()
+#     & df_anagrafica_attivi["annoprimoaccesso"].notnull(),
 #     "annodiagnosidiabete",
-# ] = aa_prob_cuore.loc[
-#     aa_prob_cuore["annodiagnosidiabete"].isna()
-#     & aa_prob_cuore["annoprimoaccesso"].notnull(),
+# ] = df_anagrafica_attivi.loc[
+#     df_anagrafica_attivi["annodiagnosidiabete"].isna()
+#     & df_anagrafica_attivi["annoprimoaccesso"].notnull(),
 #     "annoprimoaccesso",
 # ]  # già fatto sopra? ops
 
 print("All filtered :")
-aa_prob_cuore = aa_prob_cuore.dropna(subset="annodiagnosidiabete")
-print(len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()))  # 49829
+df_anagrafica_attivi = df_anagrafica_attivi.dropna(subset="annodiagnosidiabete")
+print(len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()))  # 49829
 
 ### Punto 2 per dataset diversi da anagrafica attivi e diagnosi
 
@@ -609,7 +611,7 @@ print("loaded prescrizioni non diabete")
 del df_list
 
 ## Calcola le chiavi dei pazienti di interesse
-aa_cuore_dates = aa_prob_cuore[
+aa_cuore_dates = df_anagrafica_attivi[
     [
         "idana",
         "idcentro",
@@ -619,8 +621,8 @@ aa_cuore_dates = aa_prob_cuore[
     ]
 ].drop_duplicates()
 print(len(aa_cuore_dates))
-# print(aa_prob_cuore.head())
-# print(aa_prob_cuore.info())
+# print(df_anagrafica_attivi.head())
+# print(df_anagrafica_attivi.info())
 
 
 ## Cast string to datatime
@@ -863,7 +865,7 @@ print(
 print("############## POINT 5 START ##############")
 
 aa_prob_cuore_filtered_keys = (
-    aa_prob_cuore[["idana", "idcentro"]]
+    df_anagrafica_attivi[["idana", "idcentro"]]
     .drop_duplicates()
     .merge(
         groups_diagnosi_and_esami_keys,
@@ -961,8 +963,14 @@ print(
     len(aa_prob_cuore_filtered_keys[["idana", "idcentro"]].drop_duplicates()),
 )
 
+aa_prob_cuore_temp = df_anagrafica_attivi.merge(
+    df_diagnosi[["idana", "idcentro", "data"]],
+    on=["idana", "idcentro"],
+    how="inner",
+)
+
 aa_prob_cuore_filtered = aa_prob_cuore_filtered_keys.merge(
-    aa_prob_cuore[["idana", "idcentro", "data"]],
+    aa_prob_cuore_temp[["idana", "idcentro", "data"]],
     on=["idana", "idcentro"],
     how="inner",
 )
@@ -1029,7 +1037,9 @@ wanted_patient = wanted_patient.merge(
 )
 
 wanted_patient_keys = wanted_patient[["idana", "idcentro"]].drop_duplicates()
-wanted_patient_keys_with_label = wanted_patient[["idana", "idcentro", "label"]].drop_duplicates()
+wanted_patient_keys_with_label = wanted_patient[
+    ["idana", "idcentro", "label"]
+].drop_duplicates()
 
 print(
     "pazienti fine punto 5: ",
@@ -1353,7 +1363,7 @@ print(df_prescirizioni_non_diabete.isna().sum())
 print("no nan")
 
 # TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
-#exit()
+# exit()
 # Check in df_anagrafica_attivi the nan values from anagraficapazientiattivi
 print("sum of nan values in df_anagrafica_attivi: ")
 df_anagrafica_attivi.isna().sum()
@@ -1375,19 +1385,33 @@ df_anagrafica_attivi.describe()
 # TODO: check if the dataset are correctly exported
 print("Exporting the cleaned datasets...")
 # TOFIX: wanted patient does not contain anagrafica information like 'datanascita', 'sesso' and 'datadecesso'
-df_anagrafica_attivi.to_csv("clean_data/anagraficapazientiattivi_c.csv", index=False) # Anagrafica
+df_anagrafica_attivi.to_csv(
+    "clean_data/anagraficapazientiattivi_c.csv", index=False
+)  # Anagrafica
 print("anagraficapazientiattivi_c.csv exported (1/8)")
-df_diagnosi.to_csv("clean_data/diagnosi_c.csv", index=False) # Diagnosi
+df_diagnosi.to_csv("clean_data/diagnosi_c.csv", index=False)  # Diagnosi
 print("diagnosi.csv exported (2/8)")
-df_esami_par.to_csv("clean_data/esamilaboratorioparametri_c.csv", index=False) # Esami Laboratorio Parametri
+df_esami_par.to_csv(
+    "clean_data/esamilaboratorioparametri_c.csv", index=False
+)  # Esami Laboratorio Parametri
 print("esamilaboratorioparametri_c.csv exported (3/8)")
-df_esami_par_cal.to_csv("clean_data/esamilaboratorioparametricalcolati_c.csv", index=False) # Esami Laboratorio Parametri Calcolati
+df_esami_par_cal.to_csv(
+    "clean_data/esamilaboratorioparametricalcolati_c.csv", index=False
+)  # Esami Laboratorio Parametri Calcolati
 print("esamilaboratorioparametricalcolati_c.csv exported (4/8)")
-df_esami_stru.to_csv("clean_data/esamistrumentali_c.csv", index=False) # Esami Strumentali
+df_esami_stru.to_csv(
+    "clean_data/esamistrumentali_c.csv", index=False
+)  # Esami Strumentali
 print("esamistrumentali_c.csv exported (5/8)")
-df_prescrizioni_diabete_farmaci.to_csv("clean_data/prescrizionidiabetefarmaci_c.csv", index=False) # Prescrizioni Diabete Farmaci
+df_prescrizioni_diabete_farmaci.to_csv(
+    "clean_data/prescrizionidiabetefarmaci_c.csv", index=False
+)  # Prescrizioni Diabete Farmaci
 print("prescrizionidiabetefarmaci_c.csv exported (6/8)")
-df_prescrizioni_diabete_non_farmaci.to_csv("clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False) # Prescrizioni Diabete Non Farmaci
+df_prescrizioni_diabete_non_farmaci.to_csv(
+    "clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False
+)  # Prescrizioni Diabete Non Farmaci
 print("prescrizionidiabetenonfarmaci_c.csv exported (7/8)")
-df_prescirizioni_non_diabete.to_csv("clean_data/prescrizioninondiabete_c.csv", index=False) # Prescrizioni Non Diabete
+df_prescirizioni_non_diabete.to_csv(
+    "clean_data/prescrizioninondiabete_c.csv", index=False
+)  # Prescrizioni Non Diabete
 print("Exporting completed!")
