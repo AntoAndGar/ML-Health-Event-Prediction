@@ -1353,7 +1353,7 @@ print(df_prescirizioni_non_diabete.isna().sum())
 print("no nan")
 
 # TODO: qui vanno esportate le varie tabelle da cui partitremo poi per i task successivi
-
+#exit()
 # Check in df_anagrafica_attivi the nan values from anagraficapazientiattivi
 print("sum of nan values in df_anagrafica_attivi: ")
 df_anagrafica_attivi.isna().sum()
