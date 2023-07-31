@@ -155,7 +155,10 @@ print("############## POINT 2 START ##############")
 
 print(
     "numero righe con anno diagnosi diabete minore dell'anno di nascita: ",
-    sum(df_anagrafica_attivi["annodiagnosidiabete"] < df_anagrafica_attivi["annonascita"]),
+    sum(
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        < df_anagrafica_attivi["annonascita"]
+    ),
 )  # 0
 
 print(
@@ -280,7 +283,10 @@ print(
 # questi son tutti a 0
 print(
     "numero righe anno diagnosi diabete minore anno di nascita: ",
-    sum(df_anagrafica_attivi["annodiagnosidiabete"] < df_anagrafica_attivi["annonascita"]),
+    sum(
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        < df_anagrafica_attivi["annonascita"]
+    ),
 )  # 0
 print(
     "numero righe anno primo accesso minore anno di nascita: ",
@@ -303,9 +309,10 @@ print(
 print(
     "numero pazienti unici con data di primo accesso maggiore della data di decesso: ",
     len(
-        df_anagrafica_attivi[df_anagrafica_attivi["annoprimoaccesso"] > df_anagrafica_attivi["annodecesso"]][
-            ["idana", "idcentro"]
-        ].drop_duplicates()
+        df_anagrafica_attivi[
+            df_anagrafica_attivi["annoprimoaccesso"]
+            > df_anagrafica_attivi["annodecesso"]
+        ][["idana", "idcentro"]].drop_duplicates()
     ),
 )
 
@@ -313,14 +320,18 @@ print(
 # i 5 non sono presenti tra i pazienti con eventi cardiovascolari
 print(
     "numero righe con data di diagnosi di diabete maggiore della data di decesso: ",
-    sum(df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]),
+    sum(
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        > df_anagrafica_attivi["annodecesso"]
+    ),
 )  # 9 righe di cui 5 unici # 0 tra i pazienti con eventi cardiovascolari
 
 print(
     "numero pazienti unici con data di diagnosi di diabete maggiore della data di decesso: ",
     len(
         df_anagrafica_attivi[
-            df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]
+            df_anagrafica_attivi["annodiagnosidiabete"]
+            > df_anagrafica_attivi["annodecesso"]
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )
@@ -428,6 +439,7 @@ def printSexInfo(dataset):
     print("Maschi: ", sum(dataset["sesso"].isin(["M"])))
     print("Femmine: ", sum(dataset["sesso"].isin(["F"])))
 
+
 # this can't work here with new change must go on point 1.3
 # def getDeaseasePercentage(dataset, deaseases):
 #     print("Deasease: ", deaseases)
@@ -490,7 +502,7 @@ def printSexInfo(dataset):
 print("Fra i pazienti con problemi al cuore abbiamo:")
 printSexInfo(df_anagrafica_attivi)
 # Deasease Distribution
-#getDeaseasePercentage(aa_prob_cuore, AMD_OF_CARDIOVASCULAR_EVENT)
+# getDeaseasePercentage(aa_prob_cuore, AMD_OF_CARDIOVASCULAR_EVENT)
 # TODO: qui i numeri non tornano quindi significa che stessi pazienti hanno avuto più codici amd diversi
 # ora vai a capire in ambito medico se significa che hanno più problemi diversi o che hanno avuto diverse diagnosi,
 # che la malattia progredisce e quindi cambia codice amd, bho
@@ -541,7 +553,8 @@ print(len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()))
 # )
 df_anagrafica_attivi = df_anagrafica_attivi.drop(
     df_anagrafica_attivi[
-        df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"]
+        df_anagrafica_attivi["annodiagnosidiabete"]
+        > df_anagrafica_attivi["annodecesso"]
     ].index,
 )  # già fatto sopra? ops
 
@@ -555,7 +568,8 @@ print(
     "numero pazienti unici con anno diagnosi diabete minore dell'anno primo accesso: ",
     len(
         df_anagrafica_attivi[
-            df_anagrafica_attivi["annodiagnosidiabete"] < df_anagrafica_attivi["annoprimoaccesso"]
+            df_anagrafica_attivi["annodiagnosidiabete"]
+            < df_anagrafica_attivi["annoprimoaccesso"]
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )  # 27592
@@ -564,7 +578,8 @@ print(
     "numero pazienti unici con anno diagnosi diabete maggiore dell'anno primo accesso: ",
     len(
         df_anagrafica_attivi[
-            df_anagrafica_attivi["annodiagnosidiabete"] >= df_anagrafica_attivi["annoprimoaccesso"]
+            df_anagrafica_attivi["annodiagnosidiabete"]
+            >= df_anagrafica_attivi["annoprimoaccesso"]
         ][["idana", "idcentro"]].drop_duplicates()
     ),
 )  # 15426
@@ -1008,11 +1023,8 @@ wanted_patient_6_months = wanted_patient.groupby(["idana", "idcentro"]).agg(
     {"data": ["min", "max"]}
 )
 
-wanted_patient_6_months["data_min"] = wanted_patient_6_months["data"]["min"]
-wanted_patient_6_months["data_max"] = wanted_patient_6_months["data"]["max"]
-
 wanted_patient_6_months["diff"] = (
-    wanted_patient_6_months["data_max"] - wanted_patient_6_months["data_min"]
+    wanted_patient_6_months["data"]["max"] - wanted_patient_6_months["data"]["min"]
 )
 
 wanted_patient_6_months = wanted_patient_6_months[
@@ -1064,20 +1076,15 @@ print(wanted_patient.isna().sum())
 # qui tutto ok
 
 print("anagrafica: ")
-# TODO: qui mi servirebbero le modifiche effettuate nel punto 2 su aa problemi cuore, quindi va rivisto il codice
 df_anagrafica_attivi = df_anagrafica_attivi.merge(
     wanted_patient_keys_with_label, on=["idana", "idcentro"], how="inner"
 )
 print(df_anagrafica_attivi.isna().sum())
-# TODO: qui ci sono 350 righe con annodiagnosi diabete a nan le eliminiamo?
-# oppure ci teniamo pazienti che non sappiamo quando gli è stato diagnosticato il diabete?
 # poi 6,5k righe con annoprimoaccesso a nan e le informazioni demografiche sono
 # spesso mancanti ma possono essere tenute usando un [UNK] in seguito
 
 # delete columns origine because it's almost always nan
 df_anagrafica_attivi = df_anagrafica_attivi.drop(columns=["origine"])
-# delete columns tipodiabete because it's always 5 that means dibete of type 2
-df_anagrafica_attivi = df_anagrafica_attivi.drop(columns=["tipodiabete"])
 
 print("diagnosi: ")
 df_diagnosi = df_diagnosi.merge(
@@ -1095,19 +1102,21 @@ df_diagnosi_nan = (
 )
 print(df_diagnosi_nan)
 
+# print(df_diagnosi[df_diagnosi["codiceamd"] == "AMD049"]["valore"].value_counts())
 # modify the values of the column valore where codiceamd == amd049 to S
 # because imbalanced wrt the other values see below:
 # valore
-# S       36145
-# 36.1      110
+# S       35673
+# 36.1      108
 mask = df_diagnosi["codiceamd"] == "AMD049"
 df_diagnosi.loc[mask, "valore"] = "S"
 
+# print(df_diagnosi[df_diagnosi["codiceamd"] == "AMD303"]["valore"].value_counts())
 # modify the values of the column valore where codiceamd == amd303 to 434.91
 # because imbalanced wrt the other values see below:
 # valore
-# 434.91    10407
-# 433.01        8
+# 434.91    10157
+# 433.01        5
 # 433.11        2
 # 434.01        2
 # 433.21        1
@@ -1115,11 +1124,12 @@ df_diagnosi.loc[mask, "valore"] = "S"
 mask = df_diagnosi["codiceamd"] == "AMD303"
 df_diagnosi.loc[mask, "valore"] = "434.91"
 
+# print(df_diagnosi[df_diagnosi["codiceamd"] == "AMD081"]["valore"].value_counts())
 # modify the values of the column valore where codiceamd == amd081 to 39.5
 # because imbalanced wrt the other values see below:
 # valore
-# 39.5     9406
-# 39.50     816
+# 39.5     9273
+# 39.50     782
 mask = df_diagnosi["codiceamd"] == "AMD081"
 df_diagnosi.loc[mask, "valore"] = "39.5"
 
@@ -1159,7 +1169,8 @@ df_esami_par.loc[mask, "valore"] = df_esami_par_temp.groupby(["sesso"])[
 ].transform(lambda x: x.fillna(x.mean()))
 
 # ora i nan sono solo i 28k degli amd009 per cui non si può effettuare un fill in quanto dati medici
-# print(df_esami_par.isna().sum())
+print("dopo fill: ")
+print(df_esami_par.isna().sum())
 
 print("esami lab parametri calcolati: ")
 df_esami_par_cal = df_esami_par_cal.merge(
@@ -1191,6 +1202,8 @@ print(
 # praticamente gli stitch 003 e 004 sono l'unica informazione utilizzabile piuttosto di amd e stitch insieme
 print(df_esami_par_cal.groupby(["codicestitch", "codiceamd"]).size())
 # TODO: che si fa si infila lo stitch nell'amd per queste 900k righe o si creano due nuovi amd appositi?
+# oppure si potrebbe eliminare completamente il codice amd e usare solo il codice stitch con relativa descrizione
+# da aggiungere come ne file amd_codes_for_bert.csv
 
 print("esami strumentali: ")
 df_esami_stru = df_esami_stru.merge(
@@ -1216,8 +1229,14 @@ df_esami_stru_nan = (
 print(df_esami_stru_nan)
 
 
-# print(df_esami_stru[df_esami_stru["codiceamd"] == "AMD126"]["valore"].value_counts())
-print(df_esami_stru[df_esami_stru["codiceamd"] == "AMD125"]["valore"].value_counts())
+print(
+    "amd126:\n",
+    df_esami_stru[df_esami_stru["codiceamd"] == "AMD126"]["valore"].value_counts(),
+)
+print(
+    "amd125:\n",
+    df_esami_stru[df_esami_stru["codiceamd"] == "AMD125"]["valore"].value_counts(),
+)
 # fill valore for codiceamd == amd126 that are nan with the value most present in the column
 # valore for codiceamd == amd126 that is N
 mask = (df_esami_stru["codiceamd"] == "AMD126") & df_esami_stru["valore"].isna()
@@ -1285,7 +1304,7 @@ print(df_prescrizioni_diabete_non_farmaci.groupby(["codiceamd"]).size())
 # non sono unibili in un unico codice (086 ha S/N e 152 un codice ministeriale).
 
 # TODO: dal seguente codice si vede che gli unici amd con valori nan sono amd096 e amd152,
-# quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd152 prendendoli
+# quindi si potrebbe fare un fill dei valori nan in base al valore più presente nel caso del codice amd152
 # mentre anche per questo motivo scarterei amd096
 df_prescrizioni_diabete_non_farmaci_nan = (
     df_prescrizioni_diabete_non_farmaci[
@@ -1297,6 +1316,8 @@ df_prescrizioni_diabete_non_farmaci_nan = (
 )
 print(df_prescrizioni_diabete_non_farmaci_nan)
 
+# for now we are deleting onli amd096 with nan values,
+# but I think we must delete all amd096 because unbalanced
 drop_mask = (
     df_prescrizioni_diabete_non_farmaci["codiceamd"] == "AMD096"
 ) & df_prescrizioni_diabete_non_farmaci["valore"].isna()
@@ -1373,11 +1394,12 @@ df_anagrafica_attivi.scolarita.value_counts()
 df_anagrafica_attivi.statocivile.value_counts()
 df_anagrafica_attivi.professione.value_counts()
 
+# I don't think those data aren't useful so I keep them (Antonio)
 # Drop the columns that are not useful for the analysis
-df_anagrafica_attivi.drop(
-    columns=["scolarita", "statocivile", "professione"], inplace=True
-)
-df_anagrafica_attivi.describe()
+# df_anagrafica_attivi.drop(
+#     columns=["scolarita", "statocivile", "professione"], inplace=True
+# )
+# df_anagrafica_attivi.describe()
 
 # EXPORT THE CLEANED DATASETS
 # Cleaned datasets are exported in the folder clean_data to be used in the next tasks.
