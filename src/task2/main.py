@@ -159,7 +159,11 @@ def dropLastSixMonths(df: pd.DataFrame) -> pd.DataFrame:
     temp = df_last_event_label_1["data_left"] < (
         df_last_event_label_1["data_right"] - pd.DateOffset(months=6)
     )
-    df = df_last_event_label_1[temp]
+    df = (
+        df_last_event_label_1[temp]
+        .drop(columns=["data_right"])
+        .rename(columns={"data_left": "data"})
+    )
     return df
 
 
@@ -179,12 +183,127 @@ print("Before: ", len(df_esami_stru))
 df_esami_stru = dropLastSixMonths(df_esami_stru)
 print("After: ", len(df_esami_stru))
 
+balancing = "standard"
 
-temp_balanced_aa = df_anagrafica_label_1.sample(
-    n=len(df_anagrafica_label_0), random_state=rng
-)
-balancaed_aa = pd.concat([temp_balanced_aa, df_anagrafica_label_0])
-print(balancaed_aa.label.value_counts())
+if balancing == "lossy":
+    temp_balanced_aa = df_anagrafica_label_1.sample(
+        n=len(df_anagrafica_label_0), random_state=rng
+    )
+    balancaed_aa = pd.concat([temp_balanced_aa, df_anagrafica_label_0])
+    print(balancaed_aa.label.value_counts())
+    balancaed_aa_keys = balancaed_aa[["idana", "idcentro"]]
+    df_diagnosi = df_diagnosi.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+    df_esami_par = df_esami_par.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+    df_esami_par_cal = df_esami_par_cal.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+    df_esami_stru = df_esami_stru.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+    df_pre_diab_farm = df_pre_diab_farm.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+    df_pre_diab_no_farm = df_pre_diab_no_farm.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+    df_pre_no_diab = df_pre_no_diab.merge(
+        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+    )
+
+elif balancing == "standard":
+    duplication_factor = 2
+    # here the duplication factor is -1 because 1 time is already present in the original df
+    # at which we append the duplicated df
+    duplicated_df_anagrafica_label_1 = pd.concat(
+        [df_anagrafica_label_1] * duplication_factor,
+        ignore_index=True,
+    )
+    duplicated_df_anagrafica_label_1[
+        "duplicated"
+    ] = duplicated_df_anagrafica_label_1.duplicated()
+
+    # assign a counter to each duplicated row
+    duplicated_df_anagrafica_label_1["duplicate_identifier"] = (
+        duplicated_df_anagrafica_label_1[duplicated_df_anagrafica_label_1["duplicated"]]
+        .groupby(["idana", "idcentro"])
+        .cumcount()
+        .add(1)
+    )
+    print(
+        duplicated_df_anagrafica_label_1.sort_values(by=["idana", "idcentro"]).head(30)
+    )
+
+    def balance(df, fraction):
+        # fraction is the quantity of events to keep
+        # merge with other df
+        new_dup_record = df.merge(
+            duplicated_df_anagrafica_label_1[
+                ["idana", "idcentro", "duplicated", "duplicate_identifier"]
+            ],
+            on=["idana", "idcentro"],
+            how="inner",
+        )
+        # shuffle and delete events at random
+        new_dup_record = new_dup_record[new_dup_record["duplicated"]].sample(
+            frac=fraction, random_state=rng
+        )
+
+        # shuffle data
+        noise = pd.to_timedelta(
+            rng.normal(0, 5, len(new_dup_record)).astype("int"), unit="d"
+        )
+        new_dup_record["data"] = new_dup_record["data"] + noise
+        # TODO: while here we are adding noise to the date, we should ensure that the new date is not
+        #  in the 6 months after last event, to ensure we are not creating other False . maybe do also here a dropLastSixMonths?
+
+        # the idana is negative for th duplicate to easly distinguish it from the original
+        # the 10000 is a number greather than the max value of number of patient in each idcentro
+        new_dup_record["idana"] = -(
+            new_dup_record["idana"].astype("int")
+            + 10000 * new_dup_record["duplicate_identifier"].astype("int")
+        )
+        # remove the duplicate identifier and duplicated columns
+        new_dup_record = new_dup_record.drop(
+            ["duplicate_identifier", "duplicated"], axis=1
+        )
+        # append the new df to the original one
+        df = pd.concat([df, new_dup_record], ignore_index=True)
+        return df
+
+    print("Before balance: ", len(df_anagrafica))
+    new_dup_record = duplicated_df_anagrafica_label_1[
+        duplicated_df_anagrafica_label_1["duplicated"]
+    ]
+    new_dup_record["idana"] = -(
+        new_dup_record["idana"].astype("int")
+        + 10000 * new_dup_record["duplicate_identifier"].astype("int")
+    )
+    new_dup_record["label"] = False
+    new_dup_record = new_dup_record.drop(["duplicate_identifier", "duplicated"], axis=1)
+    df_anagrafica = pd.concat([df_anagrafica, new_dup_record], ignore_index=True)
+    print("After balance: ", len(df_anagrafica))
+    print(df_anagrafica.label.value_counts())
+
+    print("Before balance: ", len(df_diagnosi))
+    df_diagnosi = balance(df_diagnosi, 0.50)
+    print("After balance: ", len(df_diagnosi))
+
+    print("Before balance: ", len(df_esami_par))
+    df_esami_par = balance(df_esami_par, 0.50)
+    print("After balance: ", len(df_esami_par))
+
+    print("Before balance: ", len(df_esami_par_cal))
+    df_esami_par_cal = balance(df_esami_par_cal, 0.50)
+    print("After balance: ", len(df_esami_par_cal))
+
+    print("Before balance: ", len(df_esami_stru))
+    df_esami_stru = balance(df_esami_stru, 0.50)
+    print("After balance: ", len(df_esami_stru))
+
 
 # # Remove events in the last 6 months
 # ## FIXME: this is not working
