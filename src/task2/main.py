@@ -1,78 +1,75 @@
 import pandas as pd
 import datetime as dt
+import numpy as np
+import concurrent.futures as futures
+import multiprocessing
+
+seed = 0
+rng = np.random.default_rng(seed)
 
 read_data_path = "clean_data"
+
+file_names = [
+    "anagraficapazientiattivi_c",
+    "diagnosi_c",
+    "esamilaboratorioparametri_c",
+    "esamilaboratorioparametricalcolati_c",
+    "esamistrumentali_c",
+    "prescrizionidiabetefarmaci_c",
+    "prescrizionidiabetenonfarmaci_c",
+    "prescrizioninondiabete_c",
+]
+
+
+def read_csv(filename):
+    return pd.read_csv(filename, header=0)
+
+
+print("Generating Futures...")
+# read all the dataset concurrently and store them in a dictionary with the name of the file as key
+with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+    df_list = dict()
+    for name in file_names:
+        df_list[str(name)] = executor.submit(read_csv, f"{read_data_path}/{name}.csv")
+
 print("Loading data...")
-### Load dataset parsing datatime to datetime64[ns] ###
-df_anagrafica = pd.read_csv(
-    read_data_path + "/anagraficapazientiattivi_c.csv",
-    header=0,
-    # names=[
-    #     "idcentro",
-    #     "idana",
-    #     "sesso",
-    #     "annodiagnosidiabete",
-    #     "annonascita",
-    #     "annoprimoaccesso",
-    #     "annodecesso",
-    #     "label",
-    # ],
-    parse_dates=["annonascita", "annoprimoaccesso", "annodecesso"],
-)
-df_diagnosi = pd.read_csv(
-    read_data_path + "/diagnosi_c.csv",
-    header=0,
-    # names=["idcentro", "idana", "data", "codiceamd", "valore"],
-    parse_dates=["data"],
-)
-df_esami_par = pd.read_csv(
-    read_data_path + "/esamilaboratorioparametri_c.csv",
-    header=0,
-    # names=["idcentro", "idana", "data", "codiceamd", "valore"],
-    parse_dates=["data"],
-)
-df_esami_par_cal = pd.read_csv(
-    read_data_path + "/esamilaboratorioparametricalcolati_c.csv",
-    header=0,
-    # names=["idcentro", "idana", "data", "codiceamd", "valore", "codicestitch"],
-    parse_dates=["data"],
-)
-df_esami_stru = pd.read_csv(
-    read_data_path + "/esamistrumentali_c.csv",
-    header=0,
-    names=["idcentro", "idana", "data", "codiceamd", "valore"],
-    parse_dates=["data"],
-)
-df_pre_diab_farm = pd.read_csv(
-    read_data_path + "/prescrizionidiabetefarmaci_c.csv",
-    header=0,
-    # names=[
-    #     "idcentro",
-    #     "idana",
-    #     "data",
-    #     "codiceatc",
-    #     "quantita",
-    #     "idpasto",
-    #     "descrizionefarmaco",
-    # ],
-    parse_dates=["data"],
-)
-df_pre_diab_no_farm = pd.read_csv(
-    read_data_path + "/prescrizionidiabetenonfarmaci_c.csv",
-    header=0,
-    # names=["idcentro", "idana", "data", "codiceamd", "valore"],
-    parse_dates=["data"],
-)
-df_pre_no_diab = pd.read_csv(
-    read_data_path + "/prescrizioninondiabete_c.csv",
-    header=0,
-    # names=["idcentro", "idana", "data", "codiceamd", "valore"],
-    parse_dates=["data"],
-)
+### Load dataset and parse dates columns to datetime64[ns] ###
+df_anagrafica = df_list["anagraficapazientiattivi_c"].result()
+df_diagnosi = df_list["diagnosi_c"].result()
+df_esami_par = df_list["esamilaboratorioparametri_c"].result()
+df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c"].result()
+df_esami_stru = df_list["esamistrumentali_c"].result()
+df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c"].result()
+df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c"].result()
+df_pre_no_diab = df_list["prescrizioninondiabete_c"].result()
+
+list_of_df = [
+    df_diagnosi,
+    df_esami_par,
+    df_esami_par_cal,
+    df_esami_stru,
+    df_pre_diab_farm,
+    df_pre_diab_no_farm,
+    df_pre_no_diab,
+]
+
+
+## Cast string to datatime
+def cast_to_datetime(df, col, format="%Y-%m-%d"):
+    df[col] = pd.to_datetime(df[col], format=format)
+    return df[col]
+
+
+for col in ["annonascita", "annoprimoaccesso", "annodecesso"]:
+    df_anagrafica[col] = cast_to_datetime(df_anagrafica, col, format="%Y-%m-%d")
+
+## Cast string to datetime
+for df in list_of_df:
+    df["data"] = cast_to_datetime(df, "data", format="%Y-%m-%d")
 
 ### Point 2.1 ####
 print("Point 2.1")
-print(df_anagrafica.head())
+# print(df_anagrafica.head())
 print(df_anagrafica.label.value_counts())
 
 df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == 0]
@@ -183,11 +180,11 @@ df_esami_stru = dropLastSixMonths(df_esami_stru)
 print("After: ", len(df_esami_stru))
 
 
-# wanted_patient = select_all_events.join(
-#     (last_problem.ge(last_event - pd.DateOffset(months=6))).rename("label"),
-#     on=["idana", "idcentro"],
-# )
-
+temp_balanced_aa = df_anagrafica_label_1.sample(
+    n=len(df_anagrafica_label_0), random_state=rng
+)
+balancaed_aa = pd.concat([temp_balanced_aa, df_anagrafica_label_0])
+print(balancaed_aa.label.value_counts())
 
 # # Remove events in the last 6 months
 # ## FIXME: this is not working
