@@ -67,6 +67,8 @@ for col in ["annonascita", "annoprimoaccesso", "annodecesso"]:
 for df in list_of_df:
     df["data"] = cast_to_datetime(df, "data", format="%Y-%m-%d")
 
+del file_names, read_csv, df_list
+
 ### Point 2.1 ####
 print("Point 2.1")
 # print(df_anagrafica.head())
@@ -191,7 +193,7 @@ if balancing == "lossy":
     )
     balanced_aa = pd.concat([temp_balanced_aa, df_anagrafica_label_0])
     print(balanced_aa.label.value_counts())
-    balanced_aa_keys = balanced_aa[["idana", "idcentro"]]
+    balanced_aa_keys = balanced_aa[["idana", "idcentro"]].drop_duplicates()
     df_diagnosi = df_diagnosi.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
@@ -233,9 +235,9 @@ elif balancing == "standard":
         .cumcount()
         .add(1)
     )
-    print(
-        duplicated_df_anagrafica_label_1.sort_values(by=["idana", "idcentro"]).head(30)
-    )
+    # print(
+    #     duplicated_df_anagrafica_label_1.sort_values(by=["idana", "idcentro"]).head(30)
+    # )
 
     def balance(df, fraction):
         # fraction is the quantity of events to keep
@@ -258,13 +260,16 @@ elif balancing == "standard":
         )
         new_dup_record["data"] = new_dup_record["data"] + noise
         # TODO: while here we are adding noise to the date, we should ensure that the new date is not
-        #  in the 6 months after last event, to ensure we are not creating other False . maybe do also here a dropLastSixMonths?
+        # in the 6 months after last event, to ensure we are not creating other False.
+        # Maybe do also here a dropLastSixMonths? nah this is improbable to happen because the
+        # noise is small and also the probability of having a date in the 6 months after the last event
+        # new_dup_record = dropLastSixMonths(new_dup_record)
 
         # the idana is negative for th duplicate to easly distinguish it from the original
         # the 10000 is a number greather than the max value of number of patient in each idcentro
         new_dup_record["idana"] = -(
             new_dup_record["idana"].astype("int")
-            + 10000 * new_dup_record["duplicate_identifier"].astype("int")
+            + 100000 * new_dup_record["duplicate_identifier"].astype("int")
         )
         # remove the duplicate identifier and duplicated columns
         new_dup_record = new_dup_record.drop(
@@ -280,13 +285,15 @@ elif balancing == "standard":
     ]
     new_dup_record["idana"] = -(
         new_dup_record["idana"].astype("int")
-        + 10000 * new_dup_record["duplicate_identifier"].astype("int")
+        + 100000 * new_dup_record["duplicate_identifier"].astype("int")
     )
     new_dup_record["label"] = False
     new_dup_record = new_dup_record.drop(["duplicate_identifier", "duplicated"], axis=1)
     df_anagrafica = pd.concat([df_anagrafica, new_dup_record], ignore_index=True)
     print("After balance: ", len(df_anagrafica))
     print(df_anagrafica.label.value_counts())
+    print(df_anagrafica.head())
+    print(df_anagrafica.tail(10))
 
     print("Before balance: ", len(df_diagnosi))
     df_diagnosi = balance(df_diagnosi, 0.50)
@@ -354,3 +361,151 @@ elif balancing == "standard":
 # aux = df_pre_no_diab_label_0.shape[0]
 # df_pre_no_diab_label_0 = dropLastSixMonths(df_pre_no_diab_label_0, True)
 # print(f"Pnd2_class0: {aux} => {df_pre_no_diab_label_0.shape[0]}")
+
+
+# Converting Dataset for Deep Learning purposes
+
+
+#########################
+# 1st version: working but slow
+
+# list_of_df = {
+#     "diagnosis": df_diagnosi,
+#     "exam parameter": df_esami_par,
+#     "exam parameter calculated": df_esami_par_cal,
+#     "exam strumental": df_esami_stru,
+#     "prescription diabete drugs": df_pre_diab_farm,
+#     "prescription diabete not drugs": df_pre_diab_no_farm,
+#     "prescription not diabete": df_pre_no_diab,
+# }
+
+# dataset = []
+# for i, patient in enumerate(
+#     df_anagrafica[["idcentro", "idana"]].drop_duplicates().values
+# ):
+#     print(i)
+#     # print("patient: ", patient)
+#     history_of_patient = "patient registry : "
+#     history_of_patient += "".join(
+#         [
+#             f"{column}: {'[UNK]' if pd.isna(df_anagrafica.loc[(df_anagrafica['idcentro'] == patient[0]) & (df_anagrafica['idana'] == patient[1]), column].item()) else df_anagrafica.loc[(df_anagrafica['idcentro'] == patient[0]) & (df_anagrafica['idana'] == patient[1]), column].item()} "
+#             for column in df_anagrafica.columns
+#             if column != "label"
+#         ]
+#     )
+#     label = int(
+#         df_anagrafica.loc[
+#             (df_anagrafica["idcentro"] == patient[0])
+#             & (df_anagrafica["idana"] == patient[1])
+#         ]["label"].item()
+#     )
+#     # for each rows of the other tables add the column and its value to the history
+#     for name, df in zip(list_of_df.keys(), list_of_df.values()):
+#         rows = f"{name}: "
+#         for row in (
+#             df.loc[(df["idcentro"] == patient[0]) & (df["idana"] == patient[1])]
+#             .sort_values(by="data")
+#             .values
+#         ):
+#             rows += "".join(
+#                 [
+#                     f"{column}: {'[UNK]' if pd.isna(row[i]) else row[i]} "
+#                     for i, column in enumerate(df.columns)
+#                     if column not in df_anagrafica.columns
+#                 ]
+#             )
+#         history_of_patient += rows
+#     dataset.append((history_of_patient, label))
+# print(history_of_patient)
+
+
+####################
+# 2nd version: better looing code but not tested line by line, but overall seems good to me, seems slower than previous version
+list_of_df = {
+    "diagnosis": df_diagnosi,
+    "exam parameter": df_esami_par,
+    "exam parameter calculated": df_esami_par_cal,
+    "exam strumental": df_esami_stru,
+    "prescription diabete drugs": df_pre_diab_farm,
+    "prescription diabete not drugs": df_pre_diab_no_farm,
+    "prescription not diabete": df_pre_no_diab,
+}
+
+dataset = []
+
+
+def create_history_string(patient):
+    # TODO remove all the : and , from the string to understand if it changes the performance
+    history = "patient registry: "
+    for column in df_anagrafica.columns:
+        if column != "label":
+            value = df_anagrafica.loc[
+                (df_anagrafica["idcentro"] == patient[0])
+                & (df_anagrafica["idana"] == patient[1])
+            ][column].item()
+            history += f"{column}: {'[UNK]' if pd.isna(value) else value}, "
+
+    for name, df in list_of_df.items():
+        history += f"{name}: "
+        df_filtered = df.loc[
+            (df["idcentro"] == patient[0]) & (df["idana"] == patient[1])
+        ]
+        if not df_filtered.empty:
+            rows = df_filtered.sort_values(by="data")
+            for _, row in rows.iterrows():
+                for column in df.columns:
+                    if column not in df_anagrafica.columns:
+                        value = row[column]
+                        history += f"{column}: {'[UNK]' if pd.isna(value) else value} "
+
+    return history
+
+
+# sequential version
+# for i, patient in enumerate(
+#     df_anagrafica[["idcentro", "idana"]].drop_duplicates().values
+# ):
+#     print(i)
+#     # Get patient history as a string from df_anagrafica and other DataFrames
+#     history_of_patient = create_history_string(patient, df_anagrafica)
+
+#     # Get label
+#     label = int(
+#         df_anagrafica.loc[
+#             (df_anagrafica["idcentro"] == patient[0])
+#             & (df_anagrafica["idana"] == patient[1])
+#         ]["label"].item()
+#     )
+
+#     dataset.append((history_of_patient, label))
+# print(history_of_patient)
+
+
+# parallel version
+# TODO I don't think this code is usable in reasonable time so I will change it maybe tomorrow
+def process_patient(patient):
+    history_of_patient = create_history_string(patient)
+    label = int(
+        df_anagrafica.loc[
+            (df_anagrafica["idcentro"] == patient[0])
+            & (df_anagrafica["idana"] == patient[1])
+        ]["label"].item()
+    )
+    return (history_of_patient, label)
+
+
+patients = df_anagrafica[["idcentro", "idana"]].drop_duplicates().values
+
+with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+    dataset = pool.map(process_patient, patients)
+
+# dataset now contains a list of tuples, each containing the patient history string and their label
+print(dataset)
+
+
+print("dataset: ", len(dataset))
+
+
+#####################
+# LSTM
+#####################
