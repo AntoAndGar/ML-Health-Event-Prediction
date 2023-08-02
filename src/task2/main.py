@@ -189,29 +189,29 @@ if balancing == "lossy":
     temp_balanced_aa = df_anagrafica_label_1.sample(
         n=len(df_anagrafica_label_0), random_state=rng
     )
-    balancaed_aa = pd.concat([temp_balanced_aa, df_anagrafica_label_0])
-    print(balancaed_aa.label.value_counts())
-    balancaed_aa_keys = balancaed_aa[["idana", "idcentro"]]
+    balanced_aa = pd.concat([temp_balanced_aa, df_anagrafica_label_0])
+    print(balanced_aa.label.value_counts())
+    balanced_aa_keys = balanced_aa[["idana", "idcentro"]]
     df_diagnosi = df_diagnosi.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_esami_par = df_esami_par.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_esami_par_cal = df_esami_par_cal.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_esami_stru = df_esami_stru.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_pre_diab_farm = df_pre_diab_farm.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_pre_diab_no_farm = df_pre_diab_no_farm.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_pre_no_diab = df_pre_no_diab.merge(
-        balancaed_aa_keys, on=["idcentro", "idana"], how="inner"
+        balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
 
 elif balancing == "standard":
