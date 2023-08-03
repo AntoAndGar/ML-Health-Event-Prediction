@@ -217,6 +217,8 @@ if balancing == "lossy":
     )
 
 elif balancing == "standard":
+    # TODO: check if this is correct, because to me it seems silly that we have
+    # to modify values with labels 1 to make them 0, at the end the model will be confused by this
     duplication_factor = 2
     # here the duplication factor is -1 because 1 time is already present in the original df
     # at which we append the duplicated df
@@ -337,7 +339,6 @@ df_anagrafica = (
             "idana": "idpatient",
             "sesso": "sex",
             "annodiagnosidiabete": "yeardiagnosisdiabetes",
-            "tipodiabete": "typeofdiabetes",
             "scolarita": "levelofeducation",
             "statocivile": "maritalstatus",
             "professione": "profession",
@@ -499,100 +500,185 @@ list_of_df = {
     "prescription not diabete": df_pre_no_diab,
 }
 
+df_anagrafica_no_label = df_anagrafica[
+    [
+        "idcenter",
+        "idpatient",
+        "sex",
+        "yeardiagnosisdiabetes",
+        "levelofeducation",
+        "maritalstatus",
+        "profession",
+        "yearofbirth",
+        "yearfirstaccess",
+        "yearofdeath",
+    ]
+]
+
+import time
+
+start_time = time.time()
+
 #########################
 # 1st version: working but slow
 
 # dataset = []
 # for i, patient in enumerate(
-#     df_anagrafica[["idcentro", "idana"]].drop_duplicates().values
+#     df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
 # ):
-#     print(i)
+#     # print(i)
 #     # print("patient: ", patient)
 #     history_of_patient = "patient registry : "
 #     history_of_patient += "".join(
 #         [
-#             f"{column}: {'[UNK]' if pd.isna(df_anagrafica.loc[(df_anagrafica['idcentro'] == patient[0]) & (df_anagrafica['idana'] == patient[1]), column].item()) else df_anagrafica.loc[(df_anagrafica['idcentro'] == patient[0]) & (df_anagrafica['idana'] == patient[1]), column].item()} "
+#             f"{column}: {df_anagrafica.loc[(df_anagrafica['idcenter'] == patient[0]) & (df_anagrafica['idpatient'] == patient[1]), column].item()} "
 #             for column in df_anagrafica.columns
 #             if column != "label"
 #         ]
 #     )
 #     label = int(
 #         df_anagrafica.loc[
-#             (df_anagrafica["idcentro"] == patient[0])
-#             & (df_anagrafica["idana"] == patient[1])
+#             (df_anagrafica["idcenter"] == patient[0])
+#             & (df_anagrafica["idpatient"] == patient[1])
 #         ]["label"].item()
 #     )
 #     # for each rows of the other tables add the column and its value to the history
 #     for name, df in zip(list_of_df.keys(), list_of_df.values()):
 #         rows = f"{name}: "
 #         for row in (
-#             df.loc[(df["idcentro"] == patient[0]) & (df["idana"] == patient[1])]
-#             .sort_values(by="data")
+#             df.loc[(df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])]
+#             .sort_values(by="date")
 #             .values
 #         ):
 #             rows += "".join(
 #                 [
-#                     f"{column}: {'[UNK]' if pd.isna(row[i]) else row[i]} "
+#                     f"{column}: {row[i]} "
 #                     for i, column in enumerate(df.columns)
 #                     if column not in df_anagrafica.columns
 #                 ]
 #             )
 #         history_of_patient += rows
 #     dataset.append((history_of_patient, label))
-# print(history_of_patient)
+## print(history_of_patient)
 
 
 ####################
-# 2nd version: better looing code but not tested line by line, but overall seems good to me, seems slower than previous version
-
-dataset = []
+# 2nd version: better looking code but not tested line by line, but overall seems good to me, seems slower than previous version
 
 
 def create_history_string(patient):
     # TODO remove all the : and , from the string to understand if it changes the performance
-    history = "patient registry: "
-    for column in df_anagrafica.columns:
-        if column != "label":
-            value = df_anagrafica.loc[
-                (df_anagrafica["idcenter"] == patient[0])
-                & (df_anagrafica["idpatient"] == patient[1])
-            ][column].item()
-            history += f"{column}: {value}, "
 
+    df_anagrafica_filtered = df_anagrafica_no_label.loc[
+        (df_anagrafica_no_label["idcenter"] == patient[0])
+        & (df_anagrafica_no_label["idpatient"] == patient[1])
+    ]
+    history = ""
+    # history += "".join(
+    #     [
+    #         f"{column}: {value}, "
+    #         for _, row in df_anagrafica_filtered.iterrows()
+    #         for column, value in row.items()
+    #     ]
+    # )
+    history += "".join(
+        [
+            f"{row}, ".replace("(", ": ", 1)
+            .replace("Timestamp(", "")
+            .replace(")", "")
+            .replace("'", "")
+            for row in df_anagrafica_filtered.itertuples(
+                index=False, name="patientregistry"
+            )
+        ]
+    )
+
+    # bit slower
+    # for name, df in list_of_df.items():
+    #     history += f"{name}: "
+    #     df_filtered = df.loc[
+    #         (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
+    #     ]
+    #     if not df_filtered.empty:
+    #         rows = df_filtered.sort_values(by="date")
+    #         for _, row in rows.iterrows():
+    #             for column in df.columns:
+    #                 if column not in df_anagrafica.columns:
+    #                     value = row[column]
+    #                     history += f"{column}: {value}, "
+
+    # seems faster
+    temp = []
+    # Iterate over each DataFrame in the dictionary list_of_df
     for name, df in list_of_df.items():
-        history += f"{name}: "
+        # Filter the rows based on patient's ID and sort by date
         df_filtered = df.loc[
             (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
+        ].sort_values(by="date")
+
+        # Extract relevant information
+        # info = [
+        #     f"{column}: {value},"
+        #     for _, row in df_filtered.iterrows()
+        #     for column, value in row.items()
+        #     # this is to avoid to add the keys twice
+        #     if column not in df_anagrafica.columns
+        # ]
+        info = [
+            f"{row},".replace("Pandas", "")
+            .replace("Timestamp(", "")
+            .replace("(", "")
+            .replace(")", "")
+            .replace("'", "")
+            for row in df_filtered.itertuples(index=False)
         ]
-        if not df_filtered.empty:
-            rows = df_filtered.sort_values(by="date")
-            for _, row in rows.iterrows():
-                for column in df.columns:
-                    if column not in df_anagrafica.columns:
-                        value = row[column]
-                        history += f"{column}: {value} "
+
+        # Add the formatted information to the temp list
+        temp.extend([f"{name}:"] + info)
+
+    # Combine the elements in the temp list into a single string
+    history += " ".join(temp)
+
+    # slower
+    # history += " ".join(
+    #     [
+    #         f"{name}: "
+    #         + " ".join(
+    #             [
+    #                 f"{col}: {value},"
+    #                 for _, row in df.loc[
+    #                     (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
+    #                 ]
+    #                 .sort_values(by="date")
+    #                 .iterrows()
+    #                 for col, value in row.items()
+    #                 if col not in df_anagrafica.columns
+    #             ]
+    #         )
+    #         for name, df in list_of_df.items()
+    #     ]
+    # )
 
     return history
 
 
 # sequential version
 # for i, patient in enumerate(
-#     df_anagrafica[["idcentro", "idana"]].drop_duplicates().values
+#     df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
 # ):
-#     print(i)
+#     # print(i)
 #     # Get patient history as a string from df_anagrafica and other DataFrames
-#     history_of_patient = create_history_string(patient, df_anagrafica)
+#     history_of_patient = create_history_string(patient)
 
 #     # Get label
 #     label = int(
 #         df_anagrafica.loc[
-#             (df_anagrafica["idcentro"] == patient[0])
-#             & (df_anagrafica["idana"] == patient[1])
+#             (df_anagrafica["idcenter"] == patient[0])
+#             & (df_anagrafica["idpatient"] == patient[1])
 #         ]["label"].item()
 #     )
 
 #     dataset.append((history_of_patient, label))
-# print(history_of_patient)
 
 
 # parallel version
@@ -608,16 +694,19 @@ def process_patient(patient):
     return (history_of_patient, label)
 
 
-patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates().values
+patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
 
+dataset = []
 with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
     dataset = pool.map(process_patient, patients)
 
-# dataset now contains a list of tuples, each containing the patient history string and their label
-print(dataset)
-
-
 print("dataset: ", len(dataset))
+end_time = time.time()
+
+# dataset now contains a list of tuples, each containing the patient history string and their label
+print(dataset[:1])
+execution_time = end_time - start_time
+print(f"Execution Time: {execution_time:.6f} seconds")
 
 
 #####################
