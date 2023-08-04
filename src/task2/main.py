@@ -519,69 +519,36 @@ import time
 
 start_time = time.time()
 
-#########################
-# 1st version: working but slow
+# to mulprocess in a multiprocess but doesn't work out
+# def process_patient_dataframe(list_of_df):
+#     name, df, patient = list_of_df
+#     # Filter the rows based on patient's ID and sort by date
+#     df_filtered = df.loc[
+#         (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
+#     ].sort_values(by="date")
 
-# dataset = []
-# for i, patient in enumerate(
-#     df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
-# ):
-#     # print(i)
-#     # print("patient: ", patient)
-#     history_of_patient = "patient registry : "
-#     history_of_patient += "".join(
-#         [
-#             f"{column}: {df_anagrafica.loc[(df_anagrafica['idcenter'] == patient[0]) & (df_anagrafica['idpatient'] == patient[1]), column].item()} "
-#             for column in df_anagrafica.columns
-#             if column != "label"
-#         ]
-#     )
-#     label = int(
-#         df_anagrafica.loc[
-#             (df_anagrafica["idcenter"] == patient[0])
-#             & (df_anagrafica["idpatient"] == patient[1])
-#         ]["label"].item()
-#     )
-#     # for each rows of the other tables add the column and its value to the history
-#     for name, df in zip(list_of_df.keys(), list_of_df.values()):
-#         rows = f"{name}: "
-#         for row in (
-#             df.loc[(df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])]
-#             .sort_values(by="date")
-#             .values
-#         ):
-#             rows += "".join(
-#                 [
-#                     f"{column}: {row[i]} "
-#                     for i, column in enumerate(df.columns)
-#                     if column not in df_anagrafica.columns
-#                 ]
-#             )
-#         history_of_patient += rows
-#     dataset.append((history_of_patient, label))
-## print(history_of_patient)
+#     # Extract relevant information
+#     info = [
+#         f"{row},".replace("Pandas", "")
+#         .replace("Timestamp(", "")
+#         .replace("(", "")
+#         .replace(")", "")
+#         .replace("'", "")
+#         for row in df_filtered.itertuples(index=False)
+#     ]
 
-
-####################
-# 2nd version: better looking code but not tested line by line, but overall seems good to me, seems slower than previous version
+#     # Add the formatted information to the temp list
+#     return [f"{name}:"] + info
 
 
 def create_history_string(patient):
     # TODO remove all the : and , from the string to understand if it changes the performance
-
     df_anagrafica_filtered = df_anagrafica_no_label.loc[
         (df_anagrafica_no_label["idcenter"] == patient[0])
         & (df_anagrafica_no_label["idpatient"] == patient[1])
     ]
-    history = ""
-    # history += "".join(
-    #     [
-    #         f"{column}: {value}, "
-    #         for _, row in df_anagrafica_filtered.iterrows()
-    #         for column, value in row.items()
-    #     ]
-    # )
-    history += "".join(
+
+    history = "".join(
         [
             f"{row}, ".replace("(", ": ", 1)
             .replace("Timestamp(", "")
@@ -593,22 +560,12 @@ def create_history_string(patient):
         ]
     )
 
-    # bit slower
-    # for name, df in list_of_df.items():
-    #     history += f"{name}: "
-    #     df_filtered = df.loc[
-    #         (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
-    #     ]
-    #     if not df_filtered.empty:
-    #         rows = df_filtered.sort_values(by="date")
-    #         for _, row in rows.iterrows():
-    #             for column in df.columns:
-    #                 if column not in df_anagrafica.columns:
-    #                     value = row[column]
-    #                     history += f"{column}: {value}, "
-
-    # seems faster
     temp = []
+    # I can't multiprocess in a function that is called by a multiprocessed function
+    # triple = [(k, v, patient) for k, v in list_of_df.items()]
+    # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+    #     temp = pool.map(process_patient_dataframe, triple)
+
     # Iterate over each DataFrame in the dictionary list_of_df
     for name, df in list_of_df.items():
         # Filter the rows based on patient's ID and sort by date
@@ -617,13 +574,6 @@ def create_history_string(patient):
         ].sort_values(by="date")
 
         # Extract relevant information
-        # info = [
-        #     f"{column}: {value},"
-        #     for _, row in df_filtered.iterrows()
-        #     for column, value in row.items()
-        #     # this is to avoid to add the keys twice
-        #     if column not in df_anagrafica.columns
-        # ]
         info = [
             f"{row},".replace("Pandas", "")
             .replace("Timestamp(", "")
@@ -638,26 +588,6 @@ def create_history_string(patient):
 
     # Combine the elements in the temp list into a single string
     history += " ".join(temp)
-
-    # slower
-    # history += " ".join(
-    #     [
-    #         f"{name}: "
-    #         + " ".join(
-    #             [
-    #                 f"{col}: {value},"
-    #                 for _, row in df.loc[
-    #                     (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
-    #                 ]
-    #                 .sort_values(by="date")
-    #                 .iterrows()
-    #                 for col, value in row.items()
-    #                 if col not in df_anagrafica.columns
-    #             ]
-    #         )
-    #         for name, df in list_of_df.items()
-    #     ]
-    # )
 
     return history
 
