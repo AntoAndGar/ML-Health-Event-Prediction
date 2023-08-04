@@ -218,7 +218,8 @@ if balancing == "lossy":
 
 elif balancing == "standard":
     # TODO: check if this is correct, because to me it seems silly that we have
-    # to modify values with labels 1 to make them 0, at the end the model will be confused by this
+    # to modify values with labels 1 to make them 0, at the end the model 
+    # will be confused by this
     duplication_factor = 2
     # here the duplication factor is -1 because 1 time is already present in the original df
     # at which we append the duplicated df
@@ -229,7 +230,6 @@ elif balancing == "standard":
     duplicated_df_anagrafica_label_1[
         "duplicated"
     ] = duplicated_df_anagrafica_label_1.duplicated()
-
     # assign a counter to each duplicated row
     duplicated_df_anagrafica_label_1["duplicate_identifier"] = (
         duplicated_df_anagrafica_label_1[duplicated_df_anagrafica_label_1["duplicated"]]
@@ -285,6 +285,7 @@ elif balancing == "standard":
     new_dup_record = duplicated_df_anagrafica_label_1[
         duplicated_df_anagrafica_label_1["duplicated"]
     ]
+    
     # FIXME: A value is trying to be set on a copy of a slice from a DataFrame.
     #       Try using .loc[row_indexer,col_indexer] = value instead
     #
@@ -294,12 +295,14 @@ elif balancing == "standard":
         new_dup_record["idana"].astype("int")
         + 100000 * new_dup_record["duplicate_identifier"].astype("int")
     )
+
     # FIXME: A value is trying to be set on a copy of a slice from a DataFrame.
     #       Try using .loc[row_indexer,col_indexer] = value instead
     #
     #       See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
     #       new_dup_record["label"] = False
     new_dup_record["label"] = False
+
     new_dup_record = new_dup_record.drop(["duplicate_identifier", "duplicated"], axis=1)
     df_anagrafica = pd.concat([df_anagrafica, new_dup_record], ignore_index=True)
     print("After balance: ", len(df_anagrafica))
@@ -636,19 +639,36 @@ def process_patient(patient):
 
 patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
 
-dataset = []
-with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-    dataset = pool.map(process_patient, patients)
+if False:
+    dataset = []
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        dataset = pool.map(process_patient, patients)
 
-print("dataset: ", len(dataset))
+    print("dataset: ", len(dataset))
+    # dataset now contains a list of tuples, each containing the patient history string and their label
+    print(dataset[:1])
+
 end_time = time.time()
-
-# dataset now contains a list of tuples, each containing the patient history string and their label
-print(dataset[:1])
 execution_time = end_time - start_time
 print(f"Execution Time: {execution_time:.6f} seconds")
 
 
+############################ 
+### Advanced Unbalancing ###
+############################
+
+#Source https://github.com/bardhprenkaj/ML_labs/blob/main/src/lab1/Data_Feature_preprocessing.ipynb
+from sklearn.datasets import make_classification
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.pipeline import Pipeline
+from matplotlib import pyplot
+from numpy import where
+
+#####################   
+# SMOTE
 #####################
+
+#####################   
 # LSTM
 #####################
