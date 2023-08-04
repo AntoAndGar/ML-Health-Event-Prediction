@@ -285,10 +285,20 @@ elif balancing == "standard":
     new_dup_record = duplicated_df_anagrafica_label_1[
         duplicated_df_anagrafica_label_1["duplicated"]
     ]
+    # FIXME: A value is trying to be set on a copy of a slice from a DataFrame.
+    #       Try using .loc[row_indexer,col_indexer] = value instead
+    #
+    #       See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+    #       new_dup_record["idana"] = -(
     new_dup_record["idana"] = -(
         new_dup_record["idana"].astype("int")
         + 100000 * new_dup_record["duplicate_identifier"].astype("int")
     )
+    # FIXME: A value is trying to be set on a copy of a slice from a DataFrame.
+    #       Try using .loc[row_indexer,col_indexer] = value instead
+    #
+    #       See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+    #       new_dup_record["label"] = False
     new_dup_record["label"] = False
     new_dup_record = new_dup_record.drop(["duplicate_identifier", "duplicated"], axis=1)
     df_anagrafica = pd.concat([df_anagrafica, new_dup_record], ignore_index=True)
