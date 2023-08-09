@@ -1,17 +1,34 @@
 import pandas as pd
-import datetime as dt
 import numpy as np
 import concurrent.futures as futures
 import multiprocessing
 import pickle
 
+from typing import Optional
+
 import torch
-from torch import cuda
+from torch.utils.data import Dataset
+from pytorch_lightning import (
+    LightningDataModule,
+    LightningModule,
+    Trainer,
+    seed_everything,
+)
+from torch.utils.data import DataLoader
+from transformers import (
+    AdamW,
+    AutoConfig,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    AutoModelForMaskedLM,
+    get_linear_schedule_with_warmup,
+)
 
-DEVICE = "cuda" if cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-seed = 0
-rng = np.random.default_rng(seed)
+SEED = 0
+rng = np.random.default_rng(SEED)
+GEN_SEED = torch.Generator().manual_seed(SEED)
 
 read_data_path = "clean_data"
 
@@ -289,7 +306,7 @@ elif balancing == "standard":
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
 
-dataset = []
+tuple_dataset = []
 load_dataset = False
 if load_dataset:
     amd = pd.read_csv("amd_codes_for_bert.csv").rename({"codice": "codiceamd"}, axis=1)
@@ -601,7 +618,7 @@ if load_dataset:
     #         ]["label"].item()
     #     )
 
-    #     dataset.append((history_of_patient, label))
+    #     tuple_dataset.append((history_of_patient, label))
 
     # parallel version
     # Okay this code with a pc of 12 core is resonable fast, 1000 patient in 11 seconds
@@ -619,11 +636,11 @@ if load_dataset:
     patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates().values
 
     with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        dataset = pool.map(process_patient, patients)
+        tuple_dataset = pool.map(process_patient, patients)
 
-    print("dataset: ", len(dataset))
+    print("dataset: ", len(tuple_dataset))
     # dataset now contains a list of tuples, each containing the patient history string and their label
-    print(dataset[:1])
+    print(tuple_dataset[:1])
 
     # end_time = time.time()
     # execution_time = end_time - start_time
@@ -632,16 +649,16 @@ if load_dataset:
     write_dataset = False
     if write_dataset:
         with open("dataset.pkl", "wb") as f:
-            pickle.dump(dataset, f)
+            pickle.dump(tuple_dataset, f)
         print("stored dataset")
 
 if not (load_dataset):
     with open("dataset.pkl", "rb") as f:
-        dataset = pickle.load(f)
+        tuple_dataset = pickle.load(f)
 
     print("loaded dataset")
-    print("dataset: ", len(dataset))
-    print(dataset[:1])
+    print("dataset: ", len(tuple_dataset))
+    print(tuple_dataset[:1])
 
 
 #####################
@@ -649,19 +666,18 @@ if not (load_dataset):
 #####################
 
 
-def evaluate_with_vanilla_LSTM():
+def evaluate_vanilla_LSTM():
     print("Using {torch.cuda.get_device_name(DEVICE)}")
 
     # why lose time using keras or tensorflow ?
     # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
+    return
 
     from keras.models import Sequential
     from keras.layers import LSTM, Dense
     from keras.optimizers import Adam
     from keras.losses import BinaryCrossentropy
     from keras.metrics import BinaryAccuracy
-
-    return
 
     # At first, we merge with the patient data
     features_lstm = pd.merge(df_diagnosi, df_anagrafica, on=["idcenter", "idpatient"])
@@ -740,15 +756,105 @@ def evaluate_with_vanilla_LSTM():
     Vanilla_LSTM.evaluate(x=X, y=rand_batch[y_columns])
 
 
-def evaluate_with_T_LSTM():
+def evaluate_T_LSTM():
     return
 
 
-def evaluate_with_PubMedBERT2():
+class PubMedBERTDataset(Dataset):
+    def __init__(self, data):
+        # here data is a list of tuples,
+        # each containing the patient history string and their label
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        patient_history = self.data[idx][0]
+        label = self.data[idx][1]
+        return patient_history, label
+
+
+class PubMedBERTDataModule(LightningDataModule):
+    def __init__(
+        self,
+        tuple_dataset,
+        model_name_with_path: str,
+        max_seq_length: int = 32768,
+        train_batch_size: int = 16,
+        eval_batch_size: int = 32,
+        **kwargs,
+    ):
+        super().__init__()
+        self.model_name_with_path = model_name_with_path
+        self.max_seq_length = max_seq_length
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = eval_batch_size
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name_with_path, use_fast=True
+        )
+
+    def setup(self):
+        dataset = PubMedBERTDataset(tuple_dataset)
+        # TODO: here call convert_to_features that toenizes the dataset
+        dataset = dataset.map(self.convert_to_features, batched=False)
+
+        # split dataset into train and validation sampling randomly
+        # use 20% of training data for validation
+        train_set_size = int(len(dataset) * 0.8)
+        valid_set_size = len(dataset) - train_set_size
+
+        # split the dataset randomly into two
+        self.train_data, self.valid_data = torch.utils.data.random_split(
+            dataset, [train_set_size, valid_set_size], generator=GEN_SEED
+        )
+
+    def prepare_data(self):
+        tokenizer = AutoTokenizer.from_pretrained(
+            "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext",
+            use_fast=True,
+        )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_data, batch_size=self.train_batch_size, shuffle=True
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.valid_data, batch_size=self.eval_batch_size, shuffle=False
+        )
+
+    def test_dataloader(self):
+        # placeholder
+        return DataLoader(
+            self.valid_data, batch_size=self.eval_batch_size, shuffle=False
+        )
+
+    def convert_to_features(self, patient, indices=None):
+        # Tokenize the patient history
+        features = self.tokenizer.batch_encode_plus(
+            patient,
+            max_length=self.max_seq_length,
+            pad_to_max_length=True,
+            truncation=False,
+        )
+
+        # Rename label to labels to make it easier to pass to model forward
+        features["labels"] = patient[1]
+
+        return features
+
+
+def evaluate_PubMedBERT():
+    # model = AutoModelForMaskedLM.from_pretrained(
+    #     "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
+    # )
     return
 
 
-evaluate_with_vanilla_LSTM()
+evaluate_vanilla_LSTM()
+evaluate_PubMedBERT()
 
 ############################
 ### Advanced Unbalancing ###
