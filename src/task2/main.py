@@ -7,7 +7,8 @@ import pickle
 from typing import Optional
 
 import torch
-from torch.utils.data import Dataset
+
+# from torch.utils.data import Dataset
 from pytorch_lightning import (
     LightningDataModule,
     LightningModule,
@@ -23,6 +24,7 @@ from transformers import (
     AutoModelForMaskedLM,
     get_linear_schedule_with_warmup,
 )
+from datasets import Dataset
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -760,19 +762,28 @@ def evaluate_T_LSTM():
     return
 
 
-class PubMedBERTDataset(Dataset):
-    def __init__(self, data):
-        # here data is a list of tuples,
-        # each containing the patient history string and their label
-        self.data = data
+# class PubMedBERTDataset(Dataset):
+#     def __init__(self, data):
+#         # here data is a list of tuples,
+#         # each containing the patient history string and their label
+#         self.data = data
 
-    def __len__(self):
-        return len(self.data)
+#     def __len__(self):
+#         return len(self.data)
 
-    def __getitem__(self, idx):
-        patient_history = self.data[idx][0]
-        label = self.data[idx][1]
-        return patient_history, label
+#     def __getitem__(self, idx):
+#         patient_history = self.data[idx][0]
+#         label = self.data[idx][1]
+#         return patient_history, label
+
+
+def convert_to_hugginfaceDataset(tuple_dataset):
+    # here data is a list of tuples,
+    # each containing the patient history string and their label
+    # we need to convert it to a hugginface dataset
+    dict_list = [{"label": data[1], "text": data[0]} for data in tuple_dataset]
+    dataset = Dataset.from_list(dict_list)
+    return dataset
 
 
 class PubMedBERTDataModule(LightningDataModule):
@@ -797,16 +808,16 @@ class PubMedBERTDataModule(LightningDataModule):
     def setup(self):
         dataset = PubMedBERTDataset(tuple_dataset)
         # TODO: here call convert_to_features that toenizes the dataset
-        dataset = dataset.map(self.convert_to_features, batched=False)
+        tokenized_dataset = self.convert_to_features(dataset)
 
         # split dataset into train and validation sampling randomly
         # use 20% of training data for validation
-        train_set_size = int(len(dataset) * 0.8)
-        valid_set_size = len(dataset) - train_set_size
+        train_set_size = int(len(tokenized_dataset) * 0.8)
+        valid_set_size = len(tokenized_dataset) - train_set_size
 
         # split the dataset randomly into two
         self.train_data, self.valid_data = torch.utils.data.random_split(
-            dataset, [train_set_size, valid_set_size], generator=GEN_SEED
+            tokenized_dataset, [train_set_size, valid_set_size], generator=GEN_SEED
         )
 
     def prepare_data(self):
@@ -837,7 +848,7 @@ class PubMedBERTDataModule(LightningDataModule):
             patient,
             max_length=self.max_seq_length,
             pad_to_max_length=True,
-            truncation=False,
+            truncation=True,
         )
 
         # Rename label to labels to make it easier to pass to model forward
