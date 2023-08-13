@@ -777,7 +777,7 @@ def evaluate_T_LSTM():
 #         return patient_history, label
 
 
-def convert_to_hugginfaceDataset(tuple_dataset):
+def convert_to_huggingfaceDataset(tuple_dataset):
     # here data is a list of tuples,
     # each containing the patient history string and their label
     # we need to convert it to a hugginface dataset
@@ -806,9 +806,11 @@ class PubMedBERTDataModule(LightningDataModule):
         )
 
     def setup(self):
-        dataset = PubMedBERTDataset(tuple_dataset)
-        # TODO: here call convert_to_features that toenizes the dataset
-        tokenized_dataset = self.convert_to_features(dataset)
+        dataset = convert_to_huggingfaceDataset(tuple_dataset)
+        tokenized_dataset = dataset.map(
+            self.convert_to_features,
+            batched=True,
+        )
 
         # split dataset into train and validation sampling randomly
         # use 20% of training data for validation
@@ -821,8 +823,8 @@ class PubMedBERTDataModule(LightningDataModule):
         )
 
     def prepare_data(self):
-        tokenizer = AutoTokenizer.from_pretrained(
-            "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext",
+        AutoTokenizer.from_pretrained(
+            self.model_name_with_path,
             use_fast=True,
         )
 
@@ -842,17 +844,17 @@ class PubMedBERTDataModule(LightningDataModule):
             self.valid_data, batch_size=self.eval_batch_size, shuffle=False
         )
 
-    def convert_to_features(self, patient, indices=None):
+    def convert_to_features(self, example_batch, indices=None):
         # Tokenize the patient history
         features = self.tokenizer.batch_encode_plus(
-            patient,
+            example_batch["text"],
             max_length=self.max_seq_length,
-            pad_to_max_length=True,
+            padding="longest",
             truncation=True,
+            return_tensors="pt",
         )
-
         # Rename label to labels to make it easier to pass to model forward
-        features["labels"] = patient[1]
+        features["labels"] = example_batch["label"]
 
         return features
 
