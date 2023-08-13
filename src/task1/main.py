@@ -2,6 +2,9 @@ import concurrent.futures as futures
 import multiprocessing
 import numpy as np
 import pandas as pd
+import time
+
+start = time.time()
 
 # Import the data
 print("############## STARTING COMPUTATION ##############")
@@ -52,7 +55,9 @@ print(f"number of records in prescrizioni non diabete: {len(df_prescrizioni_non_
 
 print("############## FUTURES CREATED ##############")
 
-prescrizioni = False
+del df_list
+
+prescrizioni = True
 
 #############################
 ##########  STEP 1 ##########
@@ -80,12 +85,7 @@ AMD_OF_CARDIOVASCULAR_EVENT = [
 ]
 
 print(
-    "numero pazienti presenti in anagrafica prima del punto 1: ",
-    len(df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates()),
-)  # 250000
-
-print(
-    "numero pazienti in anagrafica presenti in diagnosi:",
+    "number of patients in anagrafica who are present in diagnosi:",
     len(
         df_anagrafica_attivi[["idana", "idcentro"]]
         .drop_duplicates()
@@ -97,16 +97,17 @@ print(
     ),
 )  # 226303
 
-# Diagnosi relative a problemi cardiaci
+# Diagnoses related to cardiovascular problems, this is the only table that contains the cardiovascular event codes
 df_diagnosi_problemi_cuore = df_diagnosi[
     df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)
 ]
 
 print(
-    "numero pazienti presenti in diagnosi con codice amd in lista (con problemi al cuore): ",
+    "number of patients present in diagnosi with cardiovascular problem (with amd code in the wanted list): ",
     len(df_diagnosi_problemi_cuore[["idana", "idcentro"]].drop_duplicates()),
 )  # 50000
 
+# Retrieving unique keys of patients of interest in order to filter other tables
 df_diagnosi_problemi_cuore_keys = df_diagnosi_problemi_cuore[
     ~df_diagnosi_problemi_cuore["data"].isna()
 ][["idana", "idcentro"]].drop_duplicates()
@@ -129,27 +130,76 @@ print(
     len(aa_prob_cuore[["idana", "idcentro"]].drop_duplicates()),
 )
 
-# modified anagrafica to have only patients with cardiovascular problemss
+# Filtering all the tables to have only patients with cardiovascular events
 df_anagrafica_attivi = df_anagrafica_attivi.merge(
     df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
 )
 
+print(f"number of records in anagrafica pazienti attivi after step 1: {len(df_anagrafica_attivi)}") # 49997
+
+df_diagnosi = df_diagnosi.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in diagnosi after step 1: {len(df_diagnosi)}") # 1938315
+
+df_esami_par = df_esami_par.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in esami laboratorio parametri after step 1: {len(df_esami_par)}") # 7371039
+
+df_esami_par_cal = df_esami_par_cal.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in esami laboratorio parametri calcolati after step 1: {len(df_esami_par_cal)}") # 2769101
+
+df_esami_stru = df_esami_stru.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in esami strumentali after step 1: {len(df_esami_stru)}") # 290793
+
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in prescrizioni diabete farmaci after step 1: {len(df_prescrizioni_diabete_farmaci)}") # 1989570
+
+df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in prescrizioni diabete non farmaci after step 1: {len(df_prescrizioni_diabete_non_farmaci)}") # 150340
+
+df_prescrizioni_non_diabete = df_prescrizioni_non_diabete.merge(
+    df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"number of records in prescrizioni non diabete after step 1: {len(df_prescrizioni_non_diabete)}") # 1995019
+
 del df_diagnosi_problemi_cuore, df_diagnosi_problemi_cuore_keys
 
-# print("Valori presenti:", df_diagnosi_problemi_cuore["valore"].unique())
+#############################
+########## STEP 2 ###########
+#############################
 
-######## PUNTO 2 ########
 print("############## POINT 2 START ##############")
 
+# Converting anagrafica dates in order to make comparisons
 df_anagrafica_attivi["annodiagnosidiabete"] = pd.to_datetime(
     df_anagrafica_attivi["annodiagnosidiabete"], format="%Y"
 )
+
 df_anagrafica_attivi["annonascita"] = pd.to_datetime(
     df_anagrafica_attivi["annonascita"], format="%Y"
 )
+
 df_anagrafica_attivi["annoprimoaccesso"] = pd.to_datetime(
     df_anagrafica_attivi["annoprimoaccesso"], format="%Y"
 )
+
 df_anagrafica_attivi["annodecesso"] = pd.to_datetime(
     df_anagrafica_attivi["annodecesso"], format="%Y"
 )
@@ -689,7 +739,11 @@ df_prescrizioni_non_diabete = clean_between_dates(df_prescrizioni_non_diabete)
 del list_of_df, aa_cuore_dates
 
 print("Pulite le date per il punto 2")
-### Punto 3
+
+#############################
+########## STEP 3 ##########
+#############################
+
 ## Append datasets
 print("############## POINT 3 START ##############")
 # print("diagnosi: ", df_diagnosi.isna().sum())
@@ -796,7 +850,10 @@ del groups_diagnosi_and_esami
 # print(groups_diagnosi_and_esami_keys.info())
 print(len(groups_diagnosi_and_esami_keys))
 
-### Punto 4
+#############################
+######### STEP 4 ############
+#############################
+
 print("############## POINT 4 START ##############")
 
 # wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
@@ -866,7 +923,10 @@ print(
     len(stitch002_dopo[stitch002_dopo.astype(float) > 300]),
 )
 
-### Punto 5
+#############################
+######### STEP 5 ############
+#############################
+
 print("############## POINT 5 START ##############")
 
 aa_prob_cuore_filtered_keys = (
@@ -1057,7 +1117,10 @@ print(
     "False patients: ", len(unwanted_patient[["idana", "idcentro"]].drop_duplicates())
 )
 
-### Point 6
+#############################
+######### Point 6 ###########
+#############################
+
 # some things for point 6 are done in point 2 and 3 to speed up computations
 print("############## POINT 6 START ##############")
 
@@ -1474,3 +1537,7 @@ else:
         "clean_data/prescrizioninondiabete_c.csv", index=False
     )  # Prescrizioni Non Diabete
     print("Exporting completed!")
+
+end = time.time()
+
+print(f"elapsed time: {end-start}")
