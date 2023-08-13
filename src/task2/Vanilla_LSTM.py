@@ -15,7 +15,6 @@ from transformers import (
 )
 
 class Vanilla_LSTM_Data_Module(pl.LightningModule):
-
     def __init__(
     self,
     mean = torch.tensor(0.0),
@@ -108,12 +107,48 @@ class Vanilla_LSTM_Data_Module(pl.LightningModule):
         return loss
 
 
+class LightingVanillaLSTM(pl.LightningModule):
+    def __init__(self, input_size, hidden_size = 1):
+        super().__init__()
+        #input_size = number of features as input
+        #hidden_size = number of features in hidden state, so the output size
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size)
+        #self.lstm = nn.LSTM(input_size=1, hidden_size=1, num_layers=1, batch_first=True)
 
+    def forward(self, input):
+        input_trans = input.view(len(input), 1)
+        lstm_out, temp = self.lstm(input_trans)
 
+        prediction = lstm_out[-1]
+        return prediction
+    
+    def configure_optimizers(self) -> Any:
+        return Adam(self.parameters(), lr=0.001)
 
-def evaluate_vanilla_LSTM():
+    def training_step(self, batch, batch_idx):
+        # Calculate loss and log training process
+
+        input_i, label_i = batch
+        output_i = self.forward(input_i[0])
+        #Loss is Sum of the squared residuals
+        loss = (output_i - label_i[0]) ** 2
+
+        self.log('train_loss', loss)    
+
+        if label_i == 0:
+            self.log("out_0", output_i)
+        elif label_i == 1:
+            self.log("out_1", output_i)
+
+        return loss
+    
+def evaluate_vanilla_LSTM(model, dataloader):
     print("Using {torch.cuda.get_device_name(DEVICE)}")
+
+    trainer = pl.Trainer(max_epochs=2000)
+    trainer.fit(model, train_dataloaders=dataloader)
 
     # why lose time using keras or tensorflow ?
     # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
+
 
