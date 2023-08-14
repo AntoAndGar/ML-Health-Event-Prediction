@@ -811,7 +811,9 @@ class PubMedBERTDataModule(LightningDataModule):
         tokenized_dataset = dataset.map(
             self.convert_to_features,
             batched=True,
+            remove_columns=["text", "label"],
         )
+        tokenized_dataset.set_format(type = 'torch')
 
         # split dataset into train and validation sampling randomly
         # use 20% of training data for validation
@@ -847,8 +849,8 @@ class PubMedBERTDataModule(LightningDataModule):
 
     def convert_to_features(self, example_batch, indices=None):
         # Tokenize the patient history
-        features = self.tokenizer.batch_encode_plus(
-            example_batch["text"],
+        features = self.tokenizer(
+            text=example_batch["text"],
             max_length=self.max_seq_length,
             padding="longest",
             truncation=True,
@@ -889,12 +891,10 @@ class PubMedBERTTransformer(LightningModule):
         )
 
     def forward(self, **inputs):
-        del inputs["label"]
-        del inputs["text"]
-        return self.model(
-            input_ids=inputs["input_ids"],
-            attention_mask=inputs["attention_mask"],
-            labels=inputs["labels"],
+        return self.model(**inputs
+            # input_ids=inputs["input_ids"],
+            # attention_mask=inputs["attention_mask"],
+            # labels=inputs["labels"],
         )
 
     def training_step(self, batch, batch_idx):
