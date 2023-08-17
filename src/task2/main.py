@@ -3,6 +3,7 @@ import numpy as np
 import concurrent.futures as futures
 import multiprocessing
 import pickle
+import Vanilla_LSTM
 
 from datetime import datetime
 from typing import Optional
@@ -25,7 +26,9 @@ from transformers import (
     AutoModelForMaskedLM,
     get_linear_schedule_with_warmup,
 )
-import datasets
+#import datasets
+
+USE_PRES = False
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -34,17 +37,20 @@ rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
 
 read_data_path = "clean_data"
-
 file_names = [
-    "anagraficapazientiattivi_c_pres",
-    "diagnosi_c_pres",
-    "esamilaboratorioparametri_c_pres",
-    "esamilaboratorioparametricalcolati_c_pres",
-    "esamistrumentali_c_pres",
-    "prescrizionidiabetefarmaci_c_pres",
-    "prescrizionidiabetenonfarmaci_c_pres",
+    "anagraficapazientiattivi_c",
+    "diagnosi_c",
+    "esamilaboratorioparametri_c",
+    "esamilaboratorioparametricalcolati_c",
+    "esamistrumentali_c",
+    "prescrizionidiabetefarmaci_c",
+    "prescrizionidiabetenonfarmaci_c",
     "prescrizioninondiabete_c",
 ]
+suffix=''
+if USE_PRES:
+    suffix = '_pres'
+    file_names + suffix
 
 
 def read_csv(filename):
@@ -60,14 +66,14 @@ with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as exec
 
 print("Loading data...")
 ### Load dataset and parse dates columns to datetime64[ns] ###
-df_anagrafica = df_list["anagraficapazientiattivi_c_pres"].result()
-df_diagnosi = df_list["diagnosi_c_pres"].result()
-df_esami_par = df_list["esamilaboratorioparametri_c_pres"].result()
-df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c_pres"].result()
-df_esami_stru = df_list["esamistrumentali_c_pres"].result()
-df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c_pres"].result()
-df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c_pres"].result()
-df_pre_no_diab = df_list["prescrizioninondiabete_c_pres"].result()
+df_anagrafica = df_list["anagraficapazientiattivi_c" + suffix].result()
+df_diagnosi = df_list["diagnosi_c" +suffix].result()
+df_esami_par = df_list["esamilaboratorioparametri_c" +suffix].result()
+df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c" +suffix].result()
+df_esami_stru = df_list["esamistrumentali_c" +suffix].result()
+df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c" + suffix].result()
+df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c" + suffix].result()
+df_pre_no_diab = df_list["prescrizioninondiabete_c" + suffix].result()
 
 list_of_df = [
     df_diagnosi,
@@ -86,7 +92,7 @@ def cast_to_datetime(df, col, format="%Y-%m-%d"):
     return df[col]
 
 
-for col in ["annonascita", "annoprimoaccesso", "annodecesso"]:
+for col in ["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"]:
     df_anagrafica[col] = cast_to_datetime(df_anagrafica, col, format="%Y-%m-%d")
 
 ## Cast string to datetime
@@ -308,7 +314,43 @@ elif balancing == "standard":
     print("Before balance: ", len(df_esami_stru))
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
+#NOTE: Gli id assumo valori anomali es(-8792111, 500)
 
+#TODO: Converti i codici da stringhe in codice
+vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab) 
+
+vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len(vanilla_df.columns)-3, hidden_size=1)
+grouped_vanilla = vanilla_df.groupby(by=["idana", "idcentro", "label"])
+inputs = []
+labels = []
+for name, group in grouped_vanilla:
+    vanilla_patient_hystory = group.sort_values(by=["data"])
+    if name[2]:
+        input("True")
+        print(name[2])
+        labels.append(1)
+    else:
+        input("False")
+        print(name[2])
+        labels.append(0)
+    vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
+    vanilla_model(torch.tensor(group.values)).detatch()
+    inputs.append([group.values])
+    
+    #vanilla_model.forward(torch.tensor(group.values))
+    #vanilla_model.forward(tuple_dataset)
+
+inputs = torch.tensor(inputs)
+labels = torch.tensor(labels)
+vanilla_dataset = Vanilla_LSTM.TensorDataset(inputs, labels)
+dataloader = Vanilla_LSTM.DataLoader(vanilla_dataset)
+
+trainer = Vanilla_LSTM.pl.Trainer(max_epochs=2000)
+trainer.fit(vanilla_model, train_dataloaders = dataloader)
+
+
+
+exit()
 tuple_dataset = []
 load_dataset = False
 if load_dataset:
