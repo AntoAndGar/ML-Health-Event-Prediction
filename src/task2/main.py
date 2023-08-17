@@ -38,18 +38,31 @@ GEN_SEED = torch.Generator().manual_seed(SEED)
 seed_everything(SEED)
 MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 
-read_data_path = "clean_data"
+READ_DATA_PATH = "clean_data"
+PRESCRIZIONI = False
 
-file_names = [
-    "anagraficapazientiattivi_c_pres",
-    "diagnosi_c_pres",
-    "esamilaboratorioparametri_c_pres",
-    "esamilaboratorioparametricalcolati_c_pres",
-    "esamistrumentali_c_pres",
-    "prescrizionidiabetefarmaci_c_pres",
-    "prescrizionidiabetenonfarmaci_c_pres",
-    "prescrizioninondiabete_c",
-]
+if PRESCRIZIONI:
+    file_names = [
+        "anagraficapazientiattivi_c_pres",
+        "diagnosi_c_pres",
+        "esamilaboratorioparametri_c_pres",
+        "esamilaboratorioparametricalcolati_c_pres",
+        "esamistrumentali_c_pres",
+        "prescrizionidiabetefarmaci_c_pres",
+        "prescrizionidiabetenonfarmaci_c_pres",
+        "prescrizioninondiabete_c",
+    ]
+else:
+    file_names = [
+        "anagraficapazientiattivi_c",
+        "diagnosi_c",
+        "esamilaboratorioparametri_c",
+        "esamilaboratorioparametricalcolati_c",
+        "esamistrumentali_c",
+        "prescrizionidiabetefarmaci_c",
+        "prescrizionidiabetenonfarmaci_c",
+        "prescrizioninondiabete_c",
+    ]
 
 
 def read_csv(filename):
@@ -61,18 +74,28 @@ print("Generating Futures...")
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
     for name in file_names:
-        df_list[str(name)] = executor.submit(read_csv, f"{read_data_path}/{name}.csv")
+        df_list[str(name)] = executor.submit(read_csv, f"{READ_DATA_PATH}/{name}.csv")
 
 print("Loading data...")
-### Load dataset and parse dates columns to datetime64[ns] ###
-df_anagrafica = df_list["anagraficapazientiattivi_c_pres"].result()
-df_diagnosi = df_list["diagnosi_c_pres"].result()
-df_esami_par = df_list["esamilaboratorioparametri_c_pres"].result()
-df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c_pres"].result()
-df_esami_stru = df_list["esamistrumentali_c_pres"].result()
-df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c_pres"].result()
-df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c_pres"].result()
-df_pre_no_diab = df_list["prescrizioninondiabete_c_pres"].result()
+# Load dataset
+if PRESCRIZIONI:
+    df_anagrafica = df_list["anagraficapazientiattivi_c_pres"].result()
+    df_diagnosi = df_list["diagnosi_c_pres"].result()
+    df_esami_par = df_list["esamilaboratorioparametri_c_pres"].result()
+    df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c_pres"].result()
+    df_esami_stru = df_list["esamistrumentali_c_pres"].result()
+    df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c_pres"].result()
+    df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c_pres"].result()
+    df_pre_no_diab = df_list["prescrizioninondiabete_c_pres"].result()
+else:
+    df_anagrafica = df_list["anagraficapazientiattivi_c"].result()
+    df_diagnosi = df_list["diagnosi_c"].result()
+    df_esami_par = df_list["esamilaboratorioparametri_c"].result()
+    df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c"].result()
+    df_esami_stru = df_list["esamistrumentali_c"].result()
+    df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c"].result()
+    df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c"].result()
+    df_pre_no_diab = df_list["prescrizioninondiabete_c"].result()
 
 list_of_df = [
     df_diagnosi,
