@@ -1,8 +1,7 @@
 import pandas as pd
 import concurrent.futures as futures
 import multiprocessing
-
-from typing import Optional
+import os
 
 import pickle
 import numpy as np
@@ -24,7 +23,6 @@ from transformers import (
 )
 
 import datasets
-from typing import Optional
 from datetime import datetime
 
 # import evaluate
@@ -37,6 +35,8 @@ rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
 seed_everything(SEED)
 MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
+
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
 PRESCRIZIONI = False
@@ -114,7 +114,7 @@ def cast_to_datetime(df, col, format="%Y-%m-%d"):
     return df[col]
 
 
-for col in ["annonascita", "annoprimoaccesso", "annodecesso"]:
+for col in ["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"]:
     df_anagrafica[col] = cast_to_datetime(df_anagrafica, col, format="%Y-%m-%d")
 
 ## Cast string to datetime
@@ -689,7 +689,7 @@ if not (load_dataset):
 
     print("loaded dataset")
     print("dataset: ", len(tuple_dataset))
-    print(tuple_dataset[:1])
+    # print(tuple_dataset[:1])
 
 
 #####################
@@ -806,8 +806,8 @@ class PubMedBERTDataModule(LightningDataModule):
         tuple_dataset,
         model_name_with_path: str,
         max_seq_length: int = 512,  # 512 is the max length of BERT and PubMedBERT but I need 32768
-        train_batch_size: int = 4,
-        eval_batch_size: int = 4,
+        train_batch_size: int = 8,
+        eval_batch_size: int = 8,
         **kwargs,
     ):
         super().__init__()
@@ -846,18 +846,27 @@ class PubMedBERTDataModule(LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_data, batch_size=self.train_batch_size, shuffle=True
+            self.train_data,
+            batch_size=self.train_batch_size,
+            shuffle=True,
+            num_workers=8,
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.valid_data, batch_size=self.eval_batch_size, shuffle=False
+            self.valid_data,
+            batch_size=self.eval_batch_size,
+            shuffle=False,
+            num_workers=4,
         )
 
     def test_dataloader(self):
         # placeholder
         return DataLoader(
-            self.valid_data, batch_size=self.eval_batch_size, shuffle=False
+            self.valid_data,
+            batch_size=self.eval_batch_size,
+            shuffle=False,
+            num_workers=4,
         )
 
     def convert_to_features(self, example_batch, indices=None):
@@ -884,9 +893,6 @@ class PubMedBERTTransformer(LightningModule):
         adam_epsilon: float = 1e-8,
         warmup_steps: int = 0,
         weight_decay: float = 0.0,
-        train_batch_size: int = 16,
-        eval_batch_size: int = 16,
-        eval_splits: Optional[list] = None,
         **kwargs,
     ):
         super().__init__()
@@ -908,17 +914,17 @@ class PubMedBERTTransformer(LightningModule):
     def step(self, batch):
         outputs = self(**batch)
         loss, logits = outputs[:2]
-        if self.hparams.num_labels > 1:
-            preds = logits.argmax(axis=1)
-        elif self.hparams.num_labels == 1:
-            preds = logits.squeeze()
+        # if self.hparams.num_labels > 1:
+        preds = logits.argmax(axis=1)
+        # elif self.hparams.num_labels == 1:
+        #    preds = logits.squeeze()
         labels = batch["labels"]
         return {"loss": loss, "logits": logits, "preds": preds, "labels": labels}
 
     def training_step(self, batch, batch_idx):
         outputs = self.step(batch)
         value = self.metric(outputs["preds"], outputs["labels"])
-        self.log("train_acc_step", value, on_epoch=True)
+        self.log("train_acc", value, on_epoch=True)
         self.log("train_loss", outputs["loss"], prog_bar=True)
         return outputs["loss"]
 
@@ -926,7 +932,8 @@ class PubMedBERTTransformer(LightningModule):
         outputs = self.step(batch)
         # self.validation_step_outputs.append(preds)
         value = self.metric(outputs["preds"], outputs["labels"])
-        self.log("train_acc_step", value, on_epoch=True)
+        self.log("val_acc", value, on_epoch=True)
+        self.log("val_loss", outputs["loss"], prog_bar=True)
         return {
             "loss": outputs["loss"],
             "preds": outputs["preds"],
@@ -994,7 +1001,7 @@ class PubMedBERTTransformer(LightningModule):
 
 def evaluate_PubMedBERT():
     dm = PubMedBERTDataModule(tuple_dataset, MODEL_NAME)
-    dm.setup("fit")
+    # dm.setup("fit")
     # print(next(iter(dm.train_dataloader())))
 
     model = PubMedBERTTransformer(
@@ -1002,7 +1009,7 @@ def evaluate_PubMedBERT():
     )
 
     trainer = Trainer(
-        max_epochs=10,
+        max_epochs=3,
         accelerator="auto",
         devices="auto",
     )
