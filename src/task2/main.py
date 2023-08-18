@@ -888,7 +888,7 @@ class PubMedBERTTransformer(LightningModule):
     def __init__(
         self,
         model_name_or_path: str,
-        num_labels: int = 2,
+        num_labels: int = 2,  # It will create a PubMedBERT model (in our case) instance with encoder weights copied from the PubMedBERT model and a randomly initialized sequence classification head on top of the encoder with an output size of 2
         learning_rate: float = 2e-5,
         adam_epsilon: float = 1e-8,
         warmup_steps: int = 0,
