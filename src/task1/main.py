@@ -3,6 +3,8 @@ import multiprocessing
 import numpy as np
 import pandas as pd
 
+PRESCRIZIONI = True
+
 # Import the data
 print("############## STARTING COMPUTATION ##############")
 
@@ -32,11 +34,11 @@ print(f"Number of records in anagrafica pazienti attivi: {len(df_anagrafica_atti
 df_diagnosi = df_list["diagnosi"].result()
 print(f"Number of records in diagnosi: {len(df_diagnosi)}") # 4427337
 
-df_esami_par = df_list["esamilaboratorioparametri"].result()
-print(f"Number of records in esami laboratorio parametri: {len(df_esami_par)}") # 28628530
+df_esami_lab_par = df_list["esamilaboratorioparametri"].result()
+print(f"Number of records in esami laboratorio parametri: {len(df_esami_lab_par)}") # 28628530
 
-df_esami_par_cal = df_list["esamilaboratorioparametricalcolati"].result()
-print(f"Number of records in esami laboratorio parametri calcolati: {len(df_esami_par_cal)}") # 10621827
+df_esami_lab_par_cal = df_list["esamilaboratorioparametricalcolati"].result()
+print(f"Number of records in esami laboratorio parametri calcolati: {len(df_esami_lab_par_cal)}") # 10621827
 
 df_esami_strumentali = df_list["esamistrumentali"].result()
 print(f"Number of records in esami strumentali: {len(df_esami_strumentali)}") # 1015740
@@ -54,11 +56,9 @@ print("############## FUTURES CREATED ##############")
 
 del df_list
 
-prescrizioni = True
-
-#############################
-##########  STEP 1 ##########
-#############################
+#######################################
+############### STEP 1 ################
+#######################################
 
 print("########## STEP 1 ##########")
 
@@ -127,17 +127,17 @@ df_diagnosi = df_diagnosi.merge(
 
 print(f"Number of records in diagnosi after step 1: {len(df_diagnosi)}") # 1938342
 
-df_esami_par = df_esami_par.merge(
+df_esami_lab_par = df_esami_lab_par.merge(
     df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
 )
 
-print(f"Number of records in esami laboratorio parametri after step 1: {len(df_esami_par)}") # 7371159
+print(f"Number of records in esami laboratorio parametri after step 1: {len(df_esami_lab_par)}") # 7371159
 
-df_esami_par_cal = df_esami_par_cal.merge(
+df_esami_lab_par_cal = df_esami_lab_par_cal.merge(
     df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
 )
 
-print(f"Number of records in esami laboratorio parametri calcolati after step 1: {len(df_esami_par_cal)}") # 2769151
+print(f"Number of records in esami laboratorio parametri calcolati after step 1: {len(df_esami_lab_par_cal)}") # 2769151
 
 df_esami_strumentali = df_esami_strumentali.merge(
     df_diagnosi_problemi_cuore_keys, on=["idcentro", "idana"], how="inner"
@@ -165,60 +165,60 @@ print(f"Number of records in prescrizioni non diabete after step 1: {len(df_pres
 
 del df_diagnosi_problemi_cuore, df_diagnosi_problemi_cuore_keys
 
-#############################
-########## STEP 2 ###########
-#############################
+#######################################
+############### STEP 2 ################
+#######################################
 
 print("########## STEP 2 ##########")
 
 # First of all we will handle the NaN values on the futures regarding dates
 print(
-    "Number of records in anagrafica pazienti attivi where anno nascita is NaN: ",
+    "Number of records in anagrafica pazienti attivi where anno nascita is NaN:",
     sum(df_anagrafica_attivi["annonascita"].isna())
 ) # 0
 
 print(
-    "Number of records in anagrafica pazienti attivi where anno primo accesso is NaN: ",
+    "Number of records in anagrafica pazienti attivi where anno primo accesso is NaN:",
     sum(df_anagrafica_attivi["annoprimoaccesso"].isna())
 ) # 6974
 
 print(
-    "Number of records in anagrafica pazienti attivi where anno diagnosi diabete is NaN: ",
+    "Number of records in anagrafica pazienti attivi where anno diagnosi diabete is NaN:",
     sum(df_anagrafica_attivi["annodiagnosidiabete"].isna())
 )  # 526
 
 print(
-    "Number of records in diagnosi where data in NaN: ",
+    "Number of records in diagnosi where data in NaN:",
     sum(df_diagnosi["data"].isna())
 ) # 479
 
 print(
-    "Number of records in esami laboratorio parametri where data is NaN: ",
-    sum(df_esami_par["data"].isna())
+    "Number of records in esami laboratorio parametri where data is NaN:",
+    sum(df_esami_lab_par["data"].isna())
 ) # 0
 
 print(
-    "Number of records in esami laboratorio parametri calcolati where data is NaN: ",
-    sum(df_esami_par_cal["data"].isna())
+    "Number of records in esami laboratorio parametri calcolati where data is NaN:",
+    sum(df_esami_lab_par_cal["data"].isna())
 ) # 0
 
 print(
-    "Number of records in esami strumentali where data is NaN: ",
+    "Number of records in esami strumentali where data is NaN:",
     sum(df_esami_strumentali["data"].isna())
 ) # 0
 
 print(
-    "Number of records in prescrizioni diabete farmaci where data is NaN: ",
+    "Number of records in prescrizioni diabete farmaci where data is NaN:",
     sum(df_prescrizioni_diabete_farmaci["data"].isna())
 ) # 0
 
 print(
-    "Number of records in prescrizioni diabete non farmaci where data is Nan: ",
+    "Number of records in prescrizioni diabete non farmaci where data is Nan:",
     sum(df_prescrizioni_diabete_non_farmaci["data"].isna())
 ) # 0
 
 print(
-    "Number of records in prescrizioni non diabete where data is NaN: ",
+    "Number of records in prescrizioni non diabete where data is NaN:",
     sum(df_prescrizioni_non_diabete["data"].isna())
 ) # 0
 
@@ -227,8 +227,8 @@ df_diagnosi = df_diagnosi[df_diagnosi["data"].notna()]
 
 df_list = [
     df_diagnosi,
-    df_esami_par,
-    df_esami_par_cal,
+    df_esami_lab_par,
+    df_esami_lab_par_cal,
     df_esami_strumentali,
     df_prescrizioni_diabete_farmaci,
     df_prescrizioni_diabete_non_farmaci,
@@ -266,8 +266,8 @@ df_anagrafica_attivi_primo_accesso_nan = df_anagrafica_attivi[df_anagrafica_atti
 esami_and_prescrizioni_concat = pd.concat(
     objs=(
         df_diagnosi[["idana", "idcentro", "data"]],
-        df_esami_par[["idana", "idcentro", "data"]], 
-        df_esami_par_cal[["idana", "idcentro", "data"]], 
+        df_esami_lab_par[["idana", "idcentro", "data"]], 
+        df_esami_lab_par_cal[["idana", "idcentro", "data"]], 
         df_esami_strumentali[["idana", "idcentro", "data"]], 
         df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]], 
         df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
@@ -324,7 +324,7 @@ df_anagrafica_attivi.loc[
     "annoprimoaccesso"
 ]
 
-# Now we are going to compare dates inside "anagrafica" in order spot inconsistent ones
+# Now we are going to compare dates inside "anagrafica" in order to spot inconsistent ones
 print(
     "Number of records in anagrafica where anno nascita is less than 1900:",
     sum(df_anagrafica_attivi["annonascita"] < pd.to_datetime(1900, format="%Y"))
@@ -366,7 +366,7 @@ df_anagrafica_attivi = df_anagrafica_attivi[
 ]
 
 print(
-    "Numero of records in anagrafica where anno diagnosi diabete is more than anno decesso:",
+    "Number of records in anagrafica where anno diagnosi diabete is more than anno decesso:",
     sum(df_anagrafica_attivi["annodiagnosidiabete"] > df_anagrafica_attivi["annodecesso"].fillna(pd.Timestamp.now())
     )
 ) # 1
@@ -377,7 +377,7 @@ df_anagrafica_attivi = df_anagrafica_attivi[
 ]
 
 # Step 2 for tables other than anagrafica
-# First we extract ids of patients of interest
+# First we extract ids and dates of patients of interest
 aa_cuore_dates = df_anagrafica_attivi[
     [
         "idana",
@@ -388,19 +388,12 @@ aa_cuore_dates = df_anagrafica_attivi[
     ]
 ].drop_duplicates()
 
-print("############## FILTERING DATASETS ##############")
-
 # Here we merge every table with id of anagrafica and delete all inconsistent dates
 def clean_between_dates(df, col="data", col_start="annonascita", col_end="annodecesso"):
-    # This create a temporary df with only patients of interest
+    # This creates a temporary df with only patients of interest
     df1 = df.merge(aa_cuore_dates, on=["idana", "idcentro"], how="inner")
 
-    print(
-        "Number of unique patients:",
-        len(df1[["idana", "idcentro"]].drop_duplicates())
-    )
-
-    # Here we filter ionconsistent dates 
+    # Here we filter inconsistent dates
     df1 = df1[
         (df1[col] >= df1[col_start]) & 
         (df1[col] <= df1[col_end].fillna(pd.Timestamp.now()))
@@ -414,166 +407,173 @@ def clean_between_dates(df, col="data", col_start="annonascita", col_end="annode
 
     return df
 
+print(f"Number of records in anagrafica pazienti attivi after step 2: {len(df_anagrafica_attivi)}") # 49193
+
 df_diagnosi = clean_between_dates(df_diagnosi)
 
-df_esami_par = clean_between_dates(df_esami_par)
+print(f"Number of records in diagnosi after step 2: {len(df_diagnosi)}") # 1910906
 
-df_esami_par_cal = clean_between_dates(df_esami_par_cal)
+df_esami_lab_par = clean_between_dates(df_esami_lab_par)
+
+print(f"Number of records in esami laboratorio parametri after step 2: {len(df_esami_lab_par)}") # 7267641
+
+df_esami_lab_par_cal = clean_between_dates(df_esami_lab_par_cal)
+
+print(f"Number of records in esami laboratorio parametri calcolati after step 2: {len(df_esami_lab_par_cal)}") # 2729420
 
 df_esami_strumentali = clean_between_dates(df_esami_strumentali)
 
+print(f"Number of records in esami strumentali after step 2: {len(df_esami_strumentali)}") # 288237
+
 df_prescrizioni_diabete_farmaci = clean_between_dates(df_prescrizioni_diabete_farmaci)
+
+print(f"Number of records in prescrizioni diabete farmaci after step 2: {len(df_prescrizioni_diabete_farmaci)}") # 1956231
 
 df_prescrizioni_diabete_non_farmaci = clean_between_dates(df_prescrizioni_diabete_non_farmaci)
 
+print(f"Number of records in prescrizioni diabete non farmaci after step 2: {len(df_prescrizioni_diabete_non_farmaci)}") # 148844
+
 df_prescrizioni_non_diabete = clean_between_dates(df_prescrizioni_non_diabete)
+
+print(f"Number of records in prescrizioni non diabete after step 2: {len(df_prescrizioni_non_diabete)}") # 1961712
 
 del df_list, aa_cuore_dates
 
-#############################
-########## STEP 3 ##########
-#############################
+#######################################
+############### STEP 3 ################
+#######################################
 
-## Append datasets
-print("############## POINT 3 START ##############")
-# print("diagnosi: ", df_diagnosi.isna().sum())
-# print("esami par: ", df_esami_par.isna().sum())
-# print("esami par cal: ", df_esami_par_cal.isna().sum())
-# print("esami stru: ", df_esami_strumentali.isna().sum())
+print("########## STEP 3 ##########")
 
-# TODO: verify if the concat is correct as the same as merge, and also if is the best way to do this
-# TODO: here we must use also prescrizioni? or only esami and diagnosi? I think for me has more sense to only look
-#  at esami and diagnosi (and also the specific talk about examinations and diagnosis and not about prescrizioni),
-#  but I'm not 100% sure
-df_diagnosi_and_esami = pd.concat(
+# First of all we need to combine all the tables regarding patients events
+esami_and_prescrizioni_concat = pd.concat(
     objs=(
-        idf.set_index(["idana", "idcentro"])
-        for idf in [
-            df_diagnosi[["idana", "idcentro", "data"]],
-            df_esami_par[["idana", "idcentro", "data"]],
-            df_esami_par_cal[["idana", "idcentro", "data"]],
-            df_esami_strumentali[["idana", "idcentro", "data"]],
-        ]
-    ),
-    # ignore_index=True,
-    join="inner",
-).reset_index()  # 49768
-
-if prescrizioni:
-    df_diagnosi_and_esami = pd.concat(
-        objs=(
-            idf.set_index(["idana", "idcentro"])
-            for idf in [
-                df_diagnosi_and_esami[["idana", "idcentro", "data"]],
-                df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]],
-                df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
-                df_prescrizioni_non_diabete[["idana", "idcentro", "data"]]
-            ]
-        ),
-        join="inner"
-    ).reset_index()
-
-print(len(df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()))
-
-print(
-    "numero pazienti di interesse inizio punto 3: ",
-    len(df_diagnosi_and_esami[["idana", "idcentro"]].drop_duplicates()),
+        df_diagnosi[["idana", "idcentro", "data"]], 
+        df_esami_lab_par[["idana", "idcentro", "data"]], 
+        df_esami_lab_par_cal[["idana", "idcentro", "data"]], 
+        df_esami_strumentali[["idana", "idcentro", "data"]]
+    )
 )
-# print(df_diagnosi_and_esami.head())
-# print(df_diagnosi_and_esami.info())
 
-groups_diagnosi_and_esami = df_diagnosi_and_esami.groupby(["idana", "idcentro"]).agg(
+if PRESCRIZIONI:
+    esami_and_prescrizioni_concat = pd.concat(
+        objs=(
+            esami_and_prescrizioni_concat[["idana", "idcentro", "data"]],
+            df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]], 
+            df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
+            df_prescrizioni_non_diabete[["idana", "idcentro", "data"]]
+        )
+    )
+
+# Then we extract the least recent and the more recent event
+esami_and_prescrizioni_grouped = esami_and_prescrizioni_concat.groupby(["idana", "idcentro"]).agg(
     {"data": ["min", "max"]}
 )
 
-
-groups_diagnosi_and_esami["data_min"] = groups_diagnosi_and_esami["data"]["min"]
-groups_diagnosi_and_esami["data_max"] = groups_diagnosi_and_esami["data"]["max"]
-# print(groups_diagnosi_and_esami.head(30))
-print("groups_diagnosi_and_esami")
-
-groups_diagnosi_and_esami["diff"] = (
-    groups_diagnosi_and_esami["data_max"] - groups_diagnosi_and_esami["data_min"]
+# And we compute the difference
+esami_and_prescrizioni_grouped["diff"] = (
+    esami_and_prescrizioni_grouped["data"]["max"] - esami_and_prescrizioni_grouped["data"]["min"]
 )
 
-# print(groups_diagnosi_and_esami.head(30))
 print(
-    "numero di pazienti con tutte le date in un unico giorno: ",
-    len(
-        groups_diagnosi_and_esami[
-            groups_diagnosi_and_esami["diff"] == pd.Timedelta("0 days")
-        ]
-    ),
-)
-print(
-    "numero di pazienti con tutte le date in un unico mese: ",
-    len(
-        groups_diagnosi_and_esami[
-            groups_diagnosi_and_esami["diff"] < pd.Timedelta("31 days")
-        ]
-    ),
-)
+    "Number of records in esami and prescrizioni concateneted where the clinical history spans less than a month:",
+    len(esami_and_prescrizioni_grouped[esami_and_prescrizioni_grouped["diff"] <= pd.Timedelta("31 days")])
+) # 797
 
-groups_diagnosi_and_esami = groups_diagnosi_and_esami[
-    groups_diagnosi_and_esami["diff"] >= pd.Timedelta("31 days")
+# Finally we delete all the patients whose clinical history spans less than a month
+esami_and_prescrizioni_grouped = esami_and_prescrizioni_grouped[
+    esami_and_prescrizioni_grouped["diff"] > pd.Timedelta("31 days")
 ]
-groups_diagnosi_and_esami = groups_diagnosi_and_esami.sort_values(by=["diff"])
-print("paziente traiettoria minima: ", groups_diagnosi_and_esami.head(2))
-print("paziente traiettoria massima: ", groups_diagnosi_and_esami.tail(4))
-print(
-    "numero pazienti fine punto 3: ",
-    len(groups_diagnosi_and_esami),
+
+# Now we select the ids in order to filter all the tables
+esami_and_prescrizioni_grouped_keys = (
+    esami_and_prescrizioni_grouped.stack().reset_index()[["idana", "idcentro"]].drop_duplicates()
 )
 
-# print(groups_diagnosi_and_esami)
-# print(groups_diagnosi_and_esami.info())
-# select only idana and idcentro from groups_diagnosi_and_esami
-
-groups_diagnosi_and_esami_keys = (
-    groups_diagnosi_and_esami.stack()
-    .reset_index()[["idana", "idcentro"]]
-    .drop_duplicates()
+df_anagrafica_attivi = df_anagrafica_attivi.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
 )
 
-del groups_diagnosi_and_esami
-# print(groups_diagnosi_and_esami_keys.head())
-# print(groups_diagnosi_and_esami_keys.info())
-print(len(groups_diagnosi_and_esami_keys))
+print(f"Number of records in anagrafica pazienti attivi after step 3: {len(df_anagrafica_attivi)}") # 48354
 
-#############################
-######### STEP 4 ############
-#############################
+df_diagnosi = df_diagnosi.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
 
-print("############## POINT 4 START ##############")
+print(f"Number of records in diagnosi after step 3: {len(df_diagnosi)}") # 1905915
+
+df_esami_lab_par = df_esami_lab_par.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"Number of records in esami laboratorio parametri after step 3: {len(df_esami_lab_par)}") # 7259736
+
+df_esami_lab_par_cal = df_esami_lab_par_cal.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"Number of records in esami laboratorio parametri calcolati after step 3: {len(df_esami_lab_par_cal)}") # 2726328
+
+df_esami_strumentali = df_esami_strumentali.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"Number of records in esami strumentali after step 3: {len(df_esami_strumentali)}") # 287848
+
+df_prescrizioni_diabete_farmaci = df_prescrizioni_diabete_farmaci.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"Number of records in prescrizioni diabete farmaci after step 3: {len(df_prescrizioni_diabete_farmaci)}") # 1954076
+
+df_prescrizioni_diabete_non_farmaci = df_prescrizioni_diabete_non_farmaci.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"Number of records in prescrizioni diabete non farmaci after step 3: {len(df_prescrizioni_diabete_non_farmaci)}") # 148638
+
+df_prescrizioni_non_diabete = df_prescrizioni_non_diabete.merge(
+    esami_and_prescrizioni_grouped_keys, on=["idcentro", "idana"], how="inner"
+)
+
+print(f"Number of records in prescrizioni non diabete after step 3: {len(df_prescrizioni_non_diabete)}") # 1959007
+
+del esami_and_prescrizioni_grouped, esami_and_prescrizioni_grouped_keys
+
+#######################################
+############### STEP 4 ################
+#######################################
+
+print("########## STEP 4 ##########")
 
 # wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
 # wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
 
 print("prima update: ")
-amd004 = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
+amd004 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
 print("numero AMD004 minori di 40: ", len(amd004[amd004.astype(float) < 40]))
 print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200]))
 
-# df_esami_par_copy = df_esami_par.copy()
-mask = df_esami_par["codiceamd"] == "AMD004"
-df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(40, 200)
+# df_esami_lab_par_copy = df_esami_lab_par.copy()
+mask = df_esami_lab_par["codiceamd"] == "AMD004"
+df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(40, 200)
 # would like to use this single line but from documentation it seems that it can cause problems
 # so we must use this in two lines with a precomputation of a mask
-# df_esami_par["valore"].update(
-#     df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
+# df_esami_lab_par["valore"].update(
+#     df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
 # )
 
-mask = df_esami_par["codiceamd"] == "AMD005"
-df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(40, 130)
+mask = df_esami_lab_par["codiceamd"] == "AMD005"
+df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(40, 130)
 
-mask = df_esami_par["codiceamd"] == "AMD007"
-df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(50, 500)
+mask = df_esami_lab_par["codiceamd"] == "AMD007"
+df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(50, 500)
 
-mask = df_esami_par["codiceamd"] == "AMD008"
-df_esami_par.loc[mask, "valore"] = df_esami_par.loc[mask, "valore"].clip(5, 15)
+mask = df_esami_lab_par["codiceamd"] == "AMD008"
+df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(5, 15)
 
 print("dopo update: ")
-amd004_dopo = df_esami_par[df_esami_par["codiceamd"] == "AMD004"]["valore"]
+amd004_dopo = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
 
 print("numero AMD004 minori di 40 dopo filtro: ", len(amd004_dopo[amd004_dopo < 40]))
 print(
@@ -583,23 +583,23 @@ print(
 
 print("prima update: ")
 
-stitch002 = df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"]["valore"]
+stitch002 = df_esami_lab_par_cal[df_esami_lab_par_cal["codicestitch"] == "STITCH002"]["valore"]
 print("numero STITCH001 minori di 30: ", len(stitch002[stitch002.astype(float) < 30]))
 print(
     "numero STITCH001 maggiori di 300: ", len(stitch002[stitch002.astype(float) > 300])
 )
 
-mask = df_esami_par_cal["codicestitch"] == "STITCH002"
-df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
+mask = df_esami_lab_par_cal["codicestitch"] == "STITCH002"
+df_esami_lab_par_cal.loc[mask, "valore"] = df_esami_lab_par_cal.loc[mask, "valore"].clip(
     30, 300
 )
 
-mask = df_esami_par_cal["codicestitch"] == "STITCH003"
-df_esami_par_cal.loc[mask, "valore"] = df_esami_par_cal.loc[mask, "valore"].clip(
+mask = df_esami_lab_par_cal["codicestitch"] == "STITCH003"
+df_esami_lab_par_cal.loc[mask, "valore"] = df_esami_lab_par_cal.loc[mask, "valore"].clip(
     60, 330
 )
 
-stitch002_dopo = df_esami_par_cal[df_esami_par_cal["codicestitch"] == "STITCH002"][
+stitch002_dopo = df_esami_lab_par_cal[df_esami_lab_par_cal["codicestitch"] == "STITCH002"][
     "valore"
 ]
 
@@ -613,35 +613,26 @@ print(
     len(stitch002_dopo[stitch002_dopo.astype(float) > 300]),
 )
 
-#############################
-######### STEP 5 ############
-#############################
+#######################################
+############### STEP 5 ################
+#######################################
 
 print("############## POINT 5 START ##############")
 
-aa_prob_cuore_filtered_keys = (
-    df_anagrafica_attivi[["idana", "idcentro"]]
-    .drop_duplicates()
-    .merge(
-        groups_diagnosi_and_esami_keys,
-        on=["idana", "idcentro"],
-        how="inner",
-    )
-)
-
-del groups_diagnosi_and_esami_keys
+aa_prob_cuore_filtered_keys = (df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates())
 
 print(
     "numero pazienti inizio punto 5: ",
     len(aa_prob_cuore_filtered_keys[["idana", "idcentro"]].drop_duplicates()),
 )
 
-df_diagnosi_and_esami = df_diagnosi_and_esami.merge(
+esami_and_prescrizioni_concat = esami_and_prescrizioni_concat.merge(
     aa_prob_cuore_filtered_keys,
     on=["idana", "idcentro"],
     how="inner",
 )
-print("df_diagnosi_and_esami merged")
+
+print("esami_and_prescrizioni_concat merged")
 
 # TODO: a questo punto dato che per il punto 3 non abbiamo usato le prescrizioni, non dobbiamo usarle nemmeno qui le prescrizioni
 #  in quanto no ritengo che siano eventi significativi, quindi qui vanno rivisti i filtri
@@ -664,11 +655,11 @@ print("df_diagnosi_and_esami merged")
 # )
 # print("df_prescrizioni_diabete_non_farmaci merged")
 
-# df_diagnosi_and_esami_and_prescrioni = pd.concat(
+# esami_and_prescrizioni_concat_and_prescrioni = pd.concat(
 #     objs=(
 #         idf.set_index(["idana", "idcentro"])
 #         for idf in [
-#             df_diagnosi_and_esami[["idcentro", "idana", "data"]],
+#             esami_and_prescrizioni_concat[["idcentro", "idana", "data"]],
 #             df_prescrizioni_diabete_farmaci[["idcentro", "idana", "data"]],
 #             df_prescrizioni_non_diabete[["idcentro", "idana", "data"]],
 #             df_prescrizioni_diabete_non_farmaci[["idcentro", "idana", "data"]],
@@ -677,10 +668,10 @@ print("df_diagnosi_and_esami merged")
 #     join="inner",
 # ).reset_index()
 
-print("df_diagnosi_and_esami concatenated")
+print("esami_and_prescrizioni_concat concatenated")
 cont = (
-    # df_diagnosi_and_esami_and_prescrioni[["idana", "idcentro"]]
-    df_diagnosi_and_esami[["idana", "idcentro"]]
+    # esami_and_prescrizioni_concat_and_prescrioni[["idana", "idcentro"]]
+    esami_and_prescrizioni_concat[["idana", "idcentro"]]
     .groupby(["idana", "idcentro"])
     .size()
     .reset_index(name="count")
@@ -691,8 +682,8 @@ print("paziente con massimo numero eventi", cont.sort_values(by=["count"]).tail(
 print("cont grouped")
 cont_filtered = cont[cont["count"] >= 2]
 
-select_all_events = df_diagnosi_and_esami.merge(
-    # df_diagnosi_and_esami_and_prescrioni.merge(
+select_all_events = esami_and_prescrizioni_concat.merge(
+    # esami_and_prescrizioni_concat_and_prescrioni.merge(
     cont_filtered.reset_index()[["idana", "idcentro"]],
     on=["idana", "idcentro"],
     how="inner",
@@ -746,9 +737,9 @@ del (
     aa_prob_cuore_filtered,
     cont,
     cont_filtered,
-    # df_diagnosi_and_esami_and_prescrioni,
+    # esami_and_prescrizioni_concat_and_prescrioni,
     aa_prob_cuore_filtered_keys,
-    df_diagnosi_and_esami,
+    esami_and_prescrizioni_concat,
 )
 
 wanted_patient = select_all_events.join(
@@ -807,9 +798,9 @@ print(
     "False patients: ", len(unwanted_patient[["idana", "idcentro"]].drop_duplicates())
 )
 
-#############################
-######### Point 6 ###########
-#############################
+#######################################
+############### STEP 6 ################
+#######################################
 
 # print("tipi possibili di diabete: ", df_anagrafica_attivi["tipodiabete"].unique())
 
@@ -887,54 +878,54 @@ df_diagnosi.loc[mask, "valore"] = "39.5"
 # only because my lack of medical knowledge
 
 print("esami lab parametri: ")
-df_esami_par = df_esami_par.merge(
+df_esami_lab_par = df_esami_lab_par.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
 
-print(df_esami_par.isna().sum())
+print(df_esami_lab_par.isna().sum())
 # qui ci sono 30k righe con valore a nan
 
-# df_esami_par_nan = (
-#     df_esami_par[df_esami_par["valore"].isna()]
+# df_esami_lab_par_nan = (
+#     df_esami_lab_par[df_esami_lab_par["valore"].isna()]
 #     .groupby(["codiceamd"])
 #     .size()
 #     .sort_values(ascending=False)
 # )
-# print(df_esami_par_nan)
+# print(df_esami_lab_par_nan)
 # i seguenti codice amd hanno i rispettivi nan:
 # codiceamd
 # AMD009    28776
 # AMD001     1599
 
-df_esami_par_temp = df_esami_par.merge(
+df_esami_lab_par_temp = df_esami_lab_par.merge(
     df_anagrafica_attivi[["idana", "idcentro", "sesso"]],
     on=["idana", "idcentro"],
     how="inner",
 )
-mask = (df_esami_par["codiceamd"] == "AMD001") & df_esami_par["valore"].isna()
-df_esami_par.loc[mask, "valore"] = df_esami_par_temp.groupby(["sesso"])[
+mask = (df_esami_lab_par["codiceamd"] == "AMD001") & df_esami_lab_par["valore"].isna()
+df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par_temp.groupby(["sesso"])[
     "valore"
 ].transform(lambda x: x.fillna(x.mean()))
 
 # ora i nan sono solo i 28k degli amd009 per cui non si può effettuare un fill in quanto dati medici
 print("dopo fill: ")
-print(df_esami_par.isna().sum())
+print(df_esami_lab_par.isna().sum())
 
 print("esami lab parametri calcolati: ")
-df_esami_par_cal = df_esami_par_cal.merge(
+df_esami_lab_par_cal = df_esami_lab_par_cal.merge(
     wanted_patient_keys, on=["idana", "idcentro"], how="inner"
 )
-print(df_esami_par_cal.isna().sum())
+print(df_esami_lab_par_cal.isna().sum())
 # qui ci sono 900k righe con codiceamd nan
 
-print(df_esami_par_cal.groupby(["codiceamd"]).size())
-print(df_esami_par_cal.groupby(["codicestitch"]).size())
+print(df_esami_lab_par_cal.groupby(["codiceamd"]).size())
+print(df_esami_lab_par_cal.groupby(["codicestitch"]).size())
 # una parte dei codiciamd mancanti possono essere fillati in base al valore del codice stitch
 # quindi va fatta un analisi raggruppando per codice stitch e poi per codice amd in modo da
 # vedere quali sono le caratterisitche per il fill dei codici amd mancanti
 # qui sotto si vede che gli 900k codici amd mancanti hanno tutti codici stitch 003 e 004
 print(
-    df_esami_par_cal[df_esami_par_cal["codiceamd"].isna()]["codicestitch"]
+    df_esami_lab_par_cal[df_esami_lab_par_cal["codiceamd"].isna()]["codicestitch"]
     .isin(["STITCH003", "STITCH004"])
     .sum()
 )
@@ -948,7 +939,7 @@ print(
 # quindi non è possibile fare un fill dei codici amd mancanti in base al codice stitch
 # poichè non ci sono relazioni tra gli stich 003 e 004 e gli amd
 # praticamente gli stitch 003 e 004 sono l'unica informazione utilizzabile piuttosto di amd e stitch insieme
-print(df_esami_par_cal.groupby(["codicestitch", "codiceamd"]).size())
+print(df_esami_lab_par_cal.groupby(["codicestitch", "codiceamd"]).size())
 # TODO: che si fa si infila lo stitch nell'amd per queste 900k righe o si creano due nuovi amd appositi?
 # oppure si potrebbe eliminare completamente il codice amd e usare solo il codice stitch con relativa descrizione
 # da aggiungere come ne file amd_codes_for_bert.csv
@@ -1156,79 +1147,41 @@ df_anagrafica_attivi.professione.value_counts()
 print("Exporting the cleaned datasets...")
 # TOFIX: wanted patient does not contain anagrafica information like 'datanascita', 'sesso' and 'datadecesso'
 
-if prescrizioni:
-    df_anagrafica_attivi.to_csv(
-        "clean_data/anagraficapazientiattivi_c_pres.csv", index=False
-    )  # Anagrafica
-    print("anagraficapazientiattivi_c_pres.csv exported (1/8)")
 
-    df_diagnosi.to_csv("clean_data/diagnosi_c_pres.csv", index=False)  # Diagnosi
-    print("diagnosi_c_pres.csv exported (2/8)")
+df_anagrafica_attivi.to_csv(
+    "clean_data/anagraficapazientiattivi_c.csv", index=False
+)  # Anagrafica
+print("anagraficapazientiattivi_c.csv exported (1/8)")
 
-    df_esami_par.to_csv(
-        "clean_data/esamilaboratorioparametri_c_pres.csv", index=False
-    )  # Esami Laboratorio Parametri
-    print("esamilaboratorioparametri_c_pres.csv exported (3/8)")
+df_diagnosi.to_csv("clean_data/diagnosi_c.csv", index=False)  # Diagnosi
+print("diagnosi_c.csv exported (2/8)")
 
-    df_esami_par_cal.to_csv(
-        "clean_data/esamilaboratorioparametricalcolati_c_pres.csv", index=False
-    )  # Esami Laboratorio Parametri Calcolati
-    print("esamilaboratorioparametricalcolati_c_pres.csv exported (4/8)")
+df_esami_lab_par.to_csv(
+    "clean_data/esamilaboratorioparametri_c.csv", index=False
+)  # Esami Laboratorio Parametri
+print("esamilaboratorioparametri_c.csv exported (3/8)")
 
-    df_esami_strumentali.to_csv(
-        "clean_data/esamistrumentali_c_pres.csv", index=False
-    )  # Esami Strumentali
-    print("esamistrumentali_c_pres.csv exported (5/8)")
+df_esami_lab_par_cal.to_csv(
+    "clean_data/esamilaboratorioparametricalcolati_c.csv", index=False
+)  # Esami Laboratorio Parametri Calcolati
+print("esamilaboratorioparametricalcolati_c.csv exported (4/8)")
 
-    df_prescrizioni_diabete_farmaci.to_csv(
-        "clean_data/prescrizionidiabetefarmaci_c_pres.csv", index=False
-    )  # Prescrizioni Diabete Farmaci
-    print("prescrizionidiabetefarmaci_c_pres.csv exported (6/8)")
+df_esami_strumentali.to_csv(
+    "clean_data/esamistrumentali_c.csv", index=False
+)  # Esami Strumentali
+print("esamistrumentali_c.csv exported (5/8)")
 
-    df_prescrizioni_diabete_non_farmaci.to_csv(
-        "clean_data/prescrizionidiabetenonfarmaci_c_pres.csv", index=False
-    )  # Prescrizioni Diabete Non Farmaci
-    print("prescrizionidiabetenonfarmaci_c_pres.csv exported (7/8)")
+df_prescrizioni_diabete_farmaci.to_csv(
+    "clean_data/prescrizionidiabetefarmaci_c.csv", index=False
+)  # Prescrizioni Diabete Farmaci
+print("prescrizionidiabetefarmaci_c.csv exported (6/8)")
 
-    df_prescrizioni_non_diabete.to_csv(
-        "clean_data/prescrizioninondiabete_c_pres.csv", index=False
-    )  # Prescrizioni Non Diabete
-    print("Exporting completed!")
-else:
-    df_anagrafica_attivi.to_csv(
-        "clean_data/anagraficapazientiattivi_c.csv", index=False
-    )  # Anagrafica
-    print("anagraficapazientiattivi_c.csv exported (1/8)")
+df_prescrizioni_diabete_non_farmaci.to_csv(
+    "clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False
+)  # Prescrizioni Diabete Non Farmaci
+print("prescrizionidiabetenonfarmaci_c.csv exported (7/8)")
 
-    df_diagnosi.to_csv("clean_data/diagnosi_c.csv", index=False)  # Diagnosi
-    print("diagnosi_c.csv exported (2/8)")
-
-    df_esami_par.to_csv(
-        "clean_data/esamilaboratorioparametri_c.csv", index=False
-    )  # Esami Laboratorio Parametri
-    print("esamilaboratorioparametri_c.csv exported (3/8)")
-
-    df_esami_par_cal.to_csv(
-        "clean_data/esamilaboratorioparametricalcolati_c.csv", index=False
-    )  # Esami Laboratorio Parametri Calcolati
-    print("esamilaboratorioparametricalcolati_c.csv exported (4/8)")
-
-    df_esami_strumentali.to_csv(
-        "clean_data/esamistrumentali_c.csv", index=False
-    )  # Esami Strumentali
-    print("esamistrumentali_c.csv exported (5/8)")
-
-    df_prescrizioni_diabete_farmaci.to_csv(
-        "clean_data/prescrizionidiabetefarmaci_c.csv", index=False
-    )  # Prescrizioni Diabete Farmaci
-    print("prescrizionidiabetefarmaci_c.csv exported (6/8)")
-
-    df_prescrizioni_diabete_non_farmaci.to_csv(
-        "clean_data/prescrizionidiabetenonfarmaci_c.csv", index=False
-    )  # Prescrizioni Diabete Non Farmaci
-    print("prescrizionidiabetenonfarmaci_c.csv exported (7/8)")
-
-    df_prescrizioni_non_diabete.to_csv(
-        "clean_data/prescrizioninondiabete_c.csv", index=False
-    )  # Prescrizioni Non Diabete
-    print("Exporting completed!")
+df_prescrizioni_non_diabete.to_csv(
+    "clean_data/prescrizioninondiabete_c.csv", index=False
+)  # Prescrizioni Non Diabete
+print("Exporting completed!")

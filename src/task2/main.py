@@ -1,56 +1,74 @@
 import pandas as pd
-import numpy as np
 import concurrent.futures as futures
 import multiprocessing
-import pickle
+import os
 import Vanilla_LSTM
 
 from datetime import datetime
 from typing import Optional
 
-import torch
-
-# from torch.utils.data import Dataset
+import pickle
+import numpy as np
 from pytorch_lightning import (
     LightningDataModule,
     LightningModule,
     Trainer,
     seed_everything,
 )
+import torch
+
 from torch.utils.data import DataLoader
 from transformers import (
-    AdamW,
+    AdamW,  # this does not work
     AutoConfig,
     AutoModelForSequenceClassification,
     AutoTokenizer,
-    AutoModelForMaskedLM,
     get_linear_schedule_with_warmup,
 )
+import datasets
+from datetime import datetime
+
+# import evaluate
+from torchmetrics.classification import BinaryAccuracy
 #import datasets
 
-USE_PRES = False
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 SEED = 0
 rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
+seed_everything(SEED)
+MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 
-read_data_path = "clean_data"
-file_names = [
-    "anagraficapazientiattivi_c",
-    "diagnosi_c",
-    "esamilaboratorioparametri_c",
-    "esamilaboratorioparametricalcolati_c",
-    "esamistrumentali_c",
-    "prescrizionidiabetefarmaci_c",
-    "prescrizionidiabetenonfarmaci_c",
-    "prescrizioninondiabete_c",
-]
-suffix=''
-if USE_PRES:
-    suffix = '_pres'
-    file_names + suffix
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
+READ_DATA_PATH = "clean_data"
+PRESCRIZIONI = False
+
+if PRESCRIZIONI:
+    file_names = [
+        "anagraficapazientiattivi_c_pres",
+        "diagnosi_c_pres",
+        "esamilaboratorioparametri_c_pres",
+        "esamilaboratorioparametricalcolati_c_pres",
+        "esamistrumentali_c_pres",
+        "prescrizionidiabetefarmaci_c_pres",
+        "prescrizionidiabetenonfarmaci_c_pres",
+        "prescrizioninondiabete_c",
+    ]
+else:
+    file_names = [
+        "anagraficapazientiattivi_c",
+        "diagnosi_c",
+        "esamilaboratorioparametri_c",
+        "esamilaboratorioparametricalcolati_c",
+        "esamistrumentali_c",
+        "prescrizionidiabetefarmaci_c",
+        "prescrizionidiabetenonfarmaci_c",
+        "prescrizioninondiabete_c",
+    ]
+
 
 
 def read_csv(filename):
@@ -62,18 +80,28 @@ print("Generating Futures...")
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
     for name in file_names:
-        df_list[str(name)] = executor.submit(read_csv, f"{read_data_path}/{name}.csv")
+        df_list[str(name)] = executor.submit(read_csv, f"{READ_DATA_PATH}/{name}.csv")
 
 print("Loading data...")
-### Load dataset and parse dates columns to datetime64[ns] ###
-df_anagrafica = df_list["anagraficapazientiattivi_c" + suffix].result()
-df_diagnosi = df_list["diagnosi_c" +suffix].result()
-df_esami_par = df_list["esamilaboratorioparametri_c" +suffix].result()
-df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c" +suffix].result()
-df_esami_stru = df_list["esamistrumentali_c" +suffix].result()
-df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c" + suffix].result()
-df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c" + suffix].result()
-df_pre_no_diab = df_list["prescrizioninondiabete_c" + suffix].result()
+# Load dataset
+if PRESCRIZIONI:
+    df_anagrafica = df_list["anagraficapazientiattivi_c_pres"].result()
+    df_diagnosi = df_list["diagnosi_c_pres"].result()
+    df_esami_par = df_list["esamilaboratorioparametri_c_pres"].result()
+    df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c_pres"].result()
+    df_esami_stru = df_list["esamistrumentali_c_pres"].result()
+    df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c_pres"].result()
+    df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c_pres"].result()
+    df_pre_no_diab = df_list["prescrizioninondiabete_c_pres"].result()
+else:
+    df_anagrafica = df_list["anagraficapazientiattivi_c"].result()
+    df_diagnosi = df_list["diagnosi_c"].result()
+    df_esami_par = df_list["esamilaboratorioparametri_c"].result()
+    df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c"].result()
+    df_esami_stru = df_list["esamistrumentali_c"].result()
+    df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c"].result()
+    df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c"].result()
+    df_pre_no_diab = df_list["prescrizioninondiabete_c"].result()
 
 list_of_df = [
     df_diagnosi,
@@ -712,7 +740,7 @@ if not (load_dataset):
 
     print("loaded dataset")
     print("dataset: ", len(tuple_dataset))
-    print(tuple_dataset[:1])
+    # print(tuple_dataset[:1])
 
 
 #####################
@@ -814,21 +842,6 @@ def evaluate_T_LSTM():
     return
 
 
-# class PubMedBERTDataset(Dataset):
-#     def __init__(self, data):
-#         # here data is a list of tuples,
-#         # each containing the patient history string and their label
-#         self.data = data
-
-#     def __len__(self):
-#         return len(self.data)
-
-#     def __getitem__(self, idx):
-#         patient_history = self.data[idx][0]
-#         label = self.data[idx][1]
-#         return patient_history, label
-
-
 def convert_to_huggingfaceDataset(tuple_dataset):
     # here data is a list of tuples,
     # each containing the patient history string and their label
@@ -843,9 +856,9 @@ class PubMedBERTDataModule(LightningDataModule):
         self,
         tuple_dataset,
         model_name_with_path: str,
-        max_seq_length: int = 32768,
-        train_batch_size: int = 16,
-        eval_batch_size: int = 32,
+        max_seq_length: int = 512,  # 512 is the max length of BERT and PubMedBERT but I need 32768
+        train_batch_size: int = 8,
+        eval_batch_size: int = 8,
         **kwargs,
     ):
         super().__init__()
@@ -858,13 +871,13 @@ class PubMedBERTDataModule(LightningDataModule):
         )
 
     def setup(self, stage=None):
-        dataset = convert_to_huggingfaceDataset(tuple_dataset[:50])
+        dataset = convert_to_huggingfaceDataset(tuple_dataset)
         tokenized_dataset = dataset.map(
             self.convert_to_features,
             batched=True,
             remove_columns=["text", "label"],
         )
-        tokenized_dataset.set_format(type = 'torch')
+        tokenized_dataset.set_format(type="torch")
 
         # split dataset into train and validation sampling randomly
         # use 20% of training data for validation
@@ -884,18 +897,27 @@ class PubMedBERTDataModule(LightningDataModule):
 
     def train_dataloader(self):
         return DataLoader(
-            self.train_data, batch_size=self.train_batch_size, shuffle=True
+            self.train_data,
+            batch_size=self.train_batch_size,
+            shuffle=True,
+            num_workers=8,
         )
 
     def val_dataloader(self):
         return DataLoader(
-            self.valid_data, batch_size=self.eval_batch_size, shuffle=False
+            self.valid_data,
+            batch_size=self.eval_batch_size,
+            shuffle=False,
+            num_workers=4,
         )
 
     def test_dataloader(self):
         # placeholder
         return DataLoader(
-            self.valid_data, batch_size=self.eval_batch_size, shuffle=False
+            self.valid_data,
+            batch_size=self.eval_batch_size,
+            shuffle=False,
+            num_workers=4,
         )
 
     def convert_to_features(self, example_batch, indices=None):
@@ -917,14 +939,11 @@ class PubMedBERTTransformer(LightningModule):
     def __init__(
         self,
         model_name_or_path: str,
-        num_labels: int = 2,
+        num_labels: int = 2,  # It will create a PubMedBERT model (in our case) instance with encoder weights copied from the PubMedBERT model and a randomly initialized sequence classification head on top of the encoder with an output size of 2
         learning_rate: float = 2e-5,
         adam_epsilon: float = 1e-8,
         warmup_steps: int = 0,
         weight_decay: float = 0.0,
-        train_batch_size: int = 32,
-        eval_batch_size: int = 32,
-        eval_splits: Optional[list] = None,
         **kwargs,
     ):
         super().__init__()
@@ -937,43 +956,62 @@ class PubMedBERTTransformer(LightningModule):
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_name_or_path, config=self.config
         )
-        self.metric = evaluate.load(
-            "accuracy", experiment_id=datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-        )
+        self.metric = BinaryAccuracy()
+        self.validation_step_outputs = []
 
     def forward(self, **inputs):
-        return self.model(**inputs
-            # input_ids=inputs["input_ids"],
-            # attention_mask=inputs["attention_mask"],
-            # labels=inputs["labels"],
-        )
+        return self.model(**inputs)
+
+    def step(self, batch):
+        outputs = self(**batch)
+        loss, logits = outputs[:2]
+        # if self.hparams.num_labels > 1:
+        preds = logits.argmax(axis=1)
+        # elif self.hparams.num_labels == 1:
+        #    preds = logits.squeeze()
+        labels = batch["labels"]
+        return {"loss": loss, "logits": logits, "preds": preds, "labels": labels}
 
     def training_step(self, batch, batch_idx):
-        outputs = self(**batch)
-        loss = outputs[0]
-        return loss
+        outputs = self.step(batch)
+        value = self.metric(outputs["preds"], outputs["labels"])
+        self.log("train_acc", value, on_epoch=True)
+        self.log("train_loss", outputs["loss"], prog_bar=True)
+        return outputs["loss"]
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        outputs = self(**batch)
-        val_loss, logits = outputs[:2]
+        outputs = self.step(batch)
+        # self.validation_step_outputs.append(preds)
+        value = self.metric(outputs["preds"], outputs["labels"])
+        self.log("val_acc", value, on_epoch=True)
+        self.log("val_loss", outputs["loss"], prog_bar=True)
+        return {
+            "loss": outputs["loss"],
+            "preds": outputs["preds"],
+            "labels": outputs["labels"],
+        }
 
-        if self.hparams.num_labels > 1:
-            preds = torch.argmax(logits, axis=1)
-        elif self.hparams.num_labels == 1:
-            preds = logits.squeeze()
-
-        labels = batch["labels"]
-
-        return {"loss": val_loss, "preds": preds, "labels": labels}
-
-    def on_validation_epoch_end(self, outputs):
-        preds = torch.cat([x["preds"] for x in outputs]).detach().cpu().numpy()
-        labels = torch.cat([x["labels"] for x in outputs]).detach().cpu().numpy()
-        loss = torch.stack([x["loss"] for x in outputs]).mean()
-        self.log("val_loss", loss, prog_bar=True)
-        self.log_dict(
-            self.metric.compute(predictions=preds, references=labels), prog_bar=True
-        )
+    # def on_validation_epoch_end(self):
+    # print("on_validation_epoch_end")
+    # print(self.validation_step_outputs)
+    # preds = (
+    #     torch.cat([x["preds"] for x in self.validation_step_outputs])
+    #     .detach()
+    #     .cpu()
+    #     .numpy()
+    # )
+    # labels = (
+    #     torch.cat([x["labels"] for x in self.validation_step_outputs])
+    #     .detach()
+    #     .cpu()
+    #     .numpy()
+    # )
+    # loss = torch.stack([x["loss"] for x in self.validation_step_outputs]).mean()
+    # self.log("val_loss", loss, prog_bar=True)
+    # self.log_dict(
+    #     self.metric.compute(predictions=preds, references=labels), prog_bar=True
+    # )
+    # self.validation_step_outputs.clear()  # free memory
 
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
@@ -997,7 +1035,7 @@ class PubMedBERTTransformer(LightningModule):
                 "weight_decay": 0.0,
             },
         ]
-        optimizer = AdamW(
+        optimizer = torch.optim.Adam(
             optimizer_grouped_parameters,
             lr=self.hparams.learning_rate,
             eps=self.hparams.adam_epsilon,
@@ -1013,21 +1051,20 @@ class PubMedBERTTransformer(LightningModule):
 
 
 def evaluate_PubMedBERT():
-    seed_everything(42)
-    model_name = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
-
-    # dm = PubMedBERTDataModule(tuple_dataset, model_name)
+    dm = PubMedBERTDataModule(tuple_dataset, MODEL_NAME)
     # dm.setup("fit")
-    # model = PubMedBERTTransformer(
-    #     model_name_or_path=model_name,
-    # )
+    # print(next(iter(dm.train_dataloader())))
 
-    # trainer = Trainer(
-    #     max_epochs=1,
-    #     accelerator="auto",
-    #     devices=1 if torch.cuda.is_available() else 1,
-    # )
-    # trainer.fit(model, datamodule=dm)
+    model = PubMedBERTTransformer(
+        model_name_or_path=MODEL_NAME,
+    )
+
+    trainer = Trainer(
+        max_epochs=3,
+        accelerator="auto",
+        devices="auto",
+    )
+    trainer.fit(model=model, datamodule=dm)
 
     return
 
