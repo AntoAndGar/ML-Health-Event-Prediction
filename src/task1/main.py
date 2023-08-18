@@ -546,90 +546,91 @@ del esami_and_prescrizioni_grouped, esami_and_prescrizioni_grouped_keys
 
 print("########## STEP 4 ##########")
 
-# wanted_amd_par = ["AMD004", "AMD005", "AMD006", "AMD007", "AMD008", "AMD009", "AMD111"]
-# wanted_stitch_par = ["STITCH001", "STITCH002", "STITCH003", "STITCH004", "STITCH005"]
+'''
+AMD004
+AMD005
+AMD006
+AMD007
+AMD008
+AMD009
+AMD111
+STITCH001
+STITCH002
+STITCH003
+STITCH004
+STITCH005
+'''
 
-print("prima update: ")
 amd004 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
-print("numero AMD004 minori di 40: ", len(amd004[amd004.astype(float) < 40]))
-print("numero AMD004 maggiori di 200: ", len(amd004[amd004.astype(float) > 200]))
 
-# df_esami_lab_par_copy = df_esami_lab_par.copy()
+print(
+    "Number of records in esami laboratorio parametri where the AMD004 value is outside the correct range:", 
+    len(amd004[amd004 < 40]) + len(amd004[amd004 > 200])
+) # 1410
+
 mask = df_esami_lab_par["codiceamd"] == "AMD004"
 df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(40, 200)
-# would like to use this single line but from documentation it seems that it can cause problems
-# so we must use this in two lines with a precomputation of a mask
-# df_esami_lab_par["valore"].update(
-#     df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"].clip(40, 200)
-# )
+
+amd005 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD005"]["valore"]
+
+print(
+    "Number of records in esami laboratorio parametri where the AMD005 value is outside the correct range:", 
+    len(amd005[amd005 < 40]) + len(amd005[amd005 > 130])
+) # 764
 
 mask = df_esami_lab_par["codiceamd"] == "AMD005"
 df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(40, 130)
 
+amd007 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD007"]["valore"]
+
+print(
+    "Number of records in esami laboratorio parametri where the AMD007 value is outside the correct range:", 
+    len(amd007[amd007 < 50]) + len(amd007[amd007 > 500])
+) # 3023
+
 mask = df_esami_lab_par["codiceamd"] == "AMD007"
 df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(50, 500)
+
+amd008 = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD008"]["valore"]
+
+print(
+    "Number of records in esami laboratorio parametri where the AMD008 value is outside the correct range:", 
+    len(amd008[amd008 < 5]) + len(amd008[amd008 > 15])
+) # 5269
 
 mask = df_esami_lab_par["codiceamd"] == "AMD008"
 df_esami_lab_par.loc[mask, "valore"] = df_esami_lab_par.loc[mask, "valore"].clip(5, 15)
 
-print("dopo update: ")
-amd004_dopo = df_esami_lab_par[df_esami_lab_par["codiceamd"] == "AMD004"]["valore"]
-
-print("numero AMD004 minori di 40 dopo filtro: ", len(amd004_dopo[amd004_dopo < 40]))
-print(
-    "numero AMD004 maggiori di 200 dopo filtro: ",
-    len(amd004_dopo[amd004_dopo.astype(float) > 200]),
-)
-
-print("prima update: ")
-
 stitch002 = df_esami_lab_par_cal[df_esami_lab_par_cal["codicestitch"] == "STITCH002"]["valore"]
-print("numero STITCH001 minori di 30: ", len(stitch002[stitch002.astype(float) < 30]))
+
 print(
-    "numero STITCH001 maggiori di 300: ", len(stitch002[stitch002.astype(float) > 300])
-)
+    "Number of records in esami laboratorio parametri where the STITCH002 value is outside the correct range:", 
+    len(stitch002[stitch002 < 30]) + len(stitch002[stitch002 > 300])
+) # 4159
 
 mask = df_esami_lab_par_cal["codicestitch"] == "STITCH002"
-df_esami_lab_par_cal.loc[mask, "valore"] = df_esami_lab_par_cal.loc[mask, "valore"].clip(
-    30, 300
-)
+df_esami_lab_par_cal.loc[mask, "valore"] = df_esami_lab_par_cal.loc[mask, "valore"].clip(30, 300)
+
+stitch003 = df_esami_lab_par_cal[df_esami_lab_par_cal["codicestitch"] == "STITCH003"]["valore"]
+
+print(
+    "Number of records in esami laboratorio parametri where the STITCH003 value is outside the correct range:", 
+    len(stitch003[stitch003 < 60]) + len(stitch003[stitch003 > 330])
+) # 9636
 
 mask = df_esami_lab_par_cal["codicestitch"] == "STITCH003"
-df_esami_lab_par_cal.loc[mask, "valore"] = df_esami_lab_par_cal.loc[mask, "valore"].clip(
-    60, 330
-)
-
-stitch002_dopo = df_esami_lab_par_cal[df_esami_lab_par_cal["codicestitch"] == "STITCH002"][
-    "valore"
-]
-
-print("dopo update: ")
-print(
-    "numero STITCH001 minori di 30 dopo filtro: ",
-    len(stitch002_dopo[stitch002_dopo < 30]),
-)
-print(
-    "numero STITCH001 maggiori di 300 dopo filtro: ",
-    len(stitch002_dopo[stitch002_dopo.astype(float) > 300]),
-)
+df_esami_lab_par_cal.loc[mask, "valore"] = df_esami_lab_par_cal.loc[mask, "valore"].clip(60, 330)
 
 #######################################
 ############### STEP 5 ################
 #######################################
 
-print("############## POINT 5 START ##############")
+print("########## STEP 5 ##########")
 
 aa_prob_cuore_filtered_keys = (df_anagrafica_attivi[["idana", "idcentro"]].drop_duplicates())
 
-print(
-    "numero pazienti inizio punto 5: ",
-    len(aa_prob_cuore_filtered_keys[["idana", "idcentro"]].drop_duplicates()),
-)
-
 esami_and_prescrizioni_concat = esami_and_prescrizioni_concat.merge(
-    aa_prob_cuore_filtered_keys,
-    on=["idana", "idcentro"],
-    how="inner",
+    aa_prob_cuore_filtered_keys, on=["idana", "idcentro"], how="inner"
 )
 
 print("esami_and_prescrizioni_concat merged")
