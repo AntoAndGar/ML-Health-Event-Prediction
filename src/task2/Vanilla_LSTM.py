@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
+import numpy as np
+
 import pytorch_lightning as pl
 
 from torch.utils.data import DataLoader, TensorDataset
@@ -196,11 +198,18 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     df_pre_no_diab['extra'] = 'non-diabete'
     df_diagnosi['extra'] = ''
 
+    print("Anagrafica Dtypessss: ", df_anagrafica.dtypes)
+
+    print(df_anagrafica['label'].value_counts())
+    print(df_anagrafica['label'].unique()) 
+    print("EEEE")
     final_df = pd.concat([df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab, df_diagnosi])
-    final_df.merge(df_anagrafica, on=['idana', 'idcentro'], how='left')
-
+    final_df.merge(df_anagrafica, on=['idana', 'idcentro'], how='inner')
+    print(len(final_df))
+    print(final_df['label'].value_counts())
+    print(final_df['label'].unique())
+    print("AAAA")
     final_df.sort_values(by=['data'])
-
     final_df['sesso'] = final_df['sesso'].replace('M', 0)
     final_df['sesso'] = final_df['sesso'].replace('F', 1)
 
@@ -208,10 +217,13 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     final_df['valore'] = final_df['valore'].replace('P', 1)
     final_df['valore'] = final_df['valore'].replace('S', 2)
 
-    final_df['label'] = final_df['label'].replace(False, 0)
-    final_df['label'] = final_df['label'].replace(True, 1)
-
-    mapping = {'True':  True, 'False': False}
+#    final_df['label'] = final_df['label'].replace(False, 0)
+#   final_df['label'] = final_df['label'].replace(True, 1)
+    print(final_df['label'].value_counts())
+    print(final_df['label'].unique()) 
+    print("++++")
+    final_df['label'] = final_df['label'].astype(str)
+    mapping = {'True':  True, 'False': False, np.nan: False}
     final_df['label'] = final_df['label'].map(mapping)
     #final_df['codiceamd'] = final_df['codiceamd'][3:]
     mapping = {k: v for v, k in enumerate(final_df.codiceamd.unique())}
@@ -233,22 +245,18 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     final_df['extra'] = final_df['extra'].map(mapping)
     
     print("Dtypessss: ", final_df.dtypes)
-    print("Valore: \t", final_df['valore'].unique())   
+    #print("Valore: \t", final_df['valore'].unique())   
     final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
+    print("TORNERemO")
     aaa = final_df['valore'].unique()   
     for i in aaa:
         if type(i) == str:
-            try:
-                float(i)
-            except:
-                raise("Valore contains not float values. Impossible to convert to numeric, and use this data for LSTM")
-    for i in aaa:
-        if type(i) == str:
-            print("Valore: \t", i)     
-     
+            raise("Value not converted to numeric. Impossible to convert to numeric, and use this data for LSTM")
+    print("AAAAAOOOOOOOO")
+    input(final_df['label'].unique()) 
     return final_df
 
-def create_arraa():
+def create_array():
     return
 
 '''

@@ -752,7 +752,7 @@ del (
 )
 
 wanted_patient = select_all_events.join(
-    (last_problem.ge(last_event - pd.DateOffset(months=6))).rename("label"),
+    (last_problem.ge(last_event - np.timedelta64(6, "M"))).rename("label"),
     on=["idana", "idcentro"],
 )
 
