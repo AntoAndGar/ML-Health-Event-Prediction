@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
+import numpy as np
+
 import pytorch_lightning as pl
 
 from torch.utils.data import DataLoader, TensorDataset
@@ -13,6 +15,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from transformers import (
     AutoTokenizer,
 )
+import pandas as pd
 
 class Vanilla_LSTM_Data_Module(pl.LightningModule):
     def __init__(
@@ -142,6 +145,7 @@ class LightingVanillaLSTM(pl.LightningModule):
 
         return loss
     
+    
 def evaluate_vanilla_LSTM(model, dataloader):
     print("Using {torch.cuda.get_device_name(DEVICE)}")
 
@@ -151,4 +155,119 @@ def evaluate_vanilla_LSTM(model, dataloader):
     # why lose time using keras or tensorflow ?
     # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
 
+def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab):
+    '''
+    df_esami_par['esame'] = 1
+    df_esami_par_cal['esame'] = 1
+    df_esami_stru['esame'] = 1
+    df_pre_diab_farm['esame'] = 0
+    df_pre_diab_no_farm['esame'] = 0
+    df_pre_no_diab['esame'] = 0
+    df_diagnosi['esame'] = 0
 
+    df_esami_par['prescrizione'] = 0
+    df_esami_par_cal['prescrizione'] = 0
+    df_esami_stru['prescrizione'] = 0
+    df_pre_diab_farm['prescrizione'] = 1
+    df_pre_diab_no_farm['prescrizione'] = 1
+    df_pre_no_diab['prescrizione'] = 1
+    df_diagnosi['eprescrizionesame'] = 0
+
+    df_esami_par['diagnosi'] = 0
+    df_esami_par_cal['diagnosi'] = 0
+    df_esami_stru['diagnosi'] = 0
+    df_pre_diab_farm['diagnosi'] = 0
+    df_pre_diab_no_farm['diagnosi'] = 0
+    df_pre_no_diab['diagnosi'] = 0
+    df_diagnosi['diagnosi'] = 1
+    '''
+
+    df_esami_par['tipo'] = 'esame'
+    df_esami_par_cal['tipo'] = 'esame'
+    df_esami_stru['tipo'] = 'esame'
+    df_pre_diab_farm['tipo'] = 'prescrizione'
+    df_pre_diab_no_farm['tipo'] = 'prescrizione'
+    df_pre_no_diab['tipo'] = 'prescrizione'
+    df_diagnosi['tipo'] = 'diagnosi'
+
+    df_esami_par['extra'] = 'parametri'
+    df_esami_par_cal['extra'] = 'parametri calcolati'
+    df_esami_stru['extra'] = 'strumentali'
+    df_pre_diab_farm['extra'] = 'farmaco diabate'
+    df_pre_diab_no_farm['extra'] = 'non-farmaco diabete'
+    df_pre_no_diab['extra'] = 'non-diabete'
+    df_diagnosi['extra'] = ''
+
+    print("Anagrafica Dtypessss: ", df_anagrafica.dtypes)
+
+    print(df_anagrafica['label'].value_counts())
+    print(df_anagrafica['label'].unique()) 
+    print("EEEE")
+    final_df = pd.concat([df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab, df_diagnosi])
+    final_df.merge(df_anagrafica, on=['idana', 'idcentro'], how='inner')
+    print(len(final_df))
+    print(final_df['label'].value_counts())
+    print(final_df['label'].unique())
+    print("AAAA")
+    final_df.sort_values(by=['data'])
+    final_df['sesso'] = final_df['sesso'].replace('M', 0)
+    final_df['sesso'] = final_df['sesso'].replace('F', 1)
+
+    final_df['valore'] = final_df['valore'].replace('N', 0)
+    final_df['valore'] = final_df['valore'].replace('P', 1)
+    final_df['valore'] = final_df['valore'].replace('S', 2)
+
+#    final_df['label'] = final_df['label'].replace(False, 0)
+#   final_df['label'] = final_df['label'].replace(True, 1)
+    print(final_df['label'].value_counts())
+    print(final_df['label'].unique()) 
+    print("++++")
+    final_df['label'] = final_df['label'].astype(str)
+    mapping = {'True':  True, 'False': False, np.nan: False}
+    final_df['label'] = final_df['label'].map(mapping)
+    #final_df['codiceamd'] = final_df['codiceamd'][3:]
+    mapping = {k: v for v, k in enumerate(final_df.codiceamd.unique())}
+    final_df['codiceamd'] = final_df['codiceamd'].map(mapping)
+
+    mapping = {k: v for v, k in enumerate(final_df.codiceatc.unique())}
+    final_df['codiceatc'] = final_df['codiceatc'].map(mapping)
+
+    mapping = {k: v for v, k in enumerate(final_df.codicestitch.unique())}
+    final_df['codicestitch'] = final_df['codicestitch'].map(mapping)
+
+    mapping = {k: v for v, k in enumerate(final_df.descrizionefarmaco.unique())}
+    final_df['descrizionefarmaco'] = final_df['descrizionefarmaco'].map(mapping)
+
+    mapping = {k: v for v, k in enumerate(final_df.tipo.unique())}
+    final_df['tipo'] = final_df['tipo'].map(mapping)
+
+    mapping = {k: v for v, k in enumerate(final_df.extra.unique())}
+    final_df['extra'] = final_df['extra'].map(mapping)
+    
+    print("Dtypessss: ", final_df.dtypes)
+    #print("Valore: \t", final_df['valore'].unique())   
+    final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
+    print("TORNERemO")
+    aaa = final_df['valore'].unique()   
+    for i in aaa:
+        if type(i) == str:
+            raise("Value not converted to numeric. Impossible to convert to numeric, and use this data for LSTM")
+    print("AAAAAOOOOOOOO")
+    input(final_df['label'].unique()) 
+    return final_df
+
+def create_array():
+    return
+
+'''
+def create_dataset(df_anagrafica, list_of_df):
+    create_dataset(
+        df_anagrafica=df_anagrafica,
+        df_diagnosi=list_of_df[0],
+        df_esami_par=list_of_df[1],
+        df_esami_par_cal=list_of_df[2],
+        df_esami_stru=list_of_df[3],
+        df_pre_diab_farm=list_of_df[4],
+        df_pre_diab_no_farm=list_of_df[5],
+        df_pre_no_diab=list_of_df[6])
+'''

@@ -2,6 +2,10 @@ import pandas as pd
 import concurrent.futures as futures
 import multiprocessing
 import os
+import Vanilla_LSTM
+
+from datetime import datetime
+from typing import Optional
 
 import pickle
 import numpy as np
@@ -21,12 +25,13 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-
 import datasets
 from datetime import datetime
 
 # import evaluate
 from torchmetrics.classification import BinaryAccuracy
+#import datasets
+
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -63,6 +68,7 @@ else:
         "prescrizionidiabetenonfarmaci_c",
         "prescrizioninondiabete_c",
     ]
+
 
 
 def read_csv(filename):
@@ -127,6 +133,11 @@ del file_names, read_csv, df_list
 print("Point 2.1")
 # print(df_anagrafica.head())
 print(df_anagrafica.label.value_counts())
+if df_anagrafica.label.unique().size > 2:
+    #print("Error: more than 2 different labels")
+    raise("Error: more than 2 different labels")
+    
+print(df_anagrafica.label.unique())
 
 df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == 0]
 df_anagrafica_label_1 = df_anagrafica[df_anagrafica.label == 1]
@@ -168,7 +179,7 @@ def dropLastSixMonths(df: pd.DataFrame) -> pd.DataFrame:
     )
     # TODO: here is < or <= ?
     temp = df_last_event_label_1["data_left"] < (
-        df_last_event_label_1["data_right"] - pd.DateOffset(months=6)
+        df_last_event_label_1["data_right"] - np.timedelta64(6, "M")
     )
     df = (
         df_last_event_label_1[temp]
@@ -336,7 +347,47 @@ elif balancing == "standard":
     print("Before balance: ", len(df_esami_stru))
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
+#NOTE: Gli id assumo valori anomali es(-8792111, 500)
 
+#TODO: Converti i codici da stringhe in codice
+print("\n\n\t\tSTART WORKING WITH LSTM \n\n")
+print(df_anagrafica.label.value_counts)
+print(df_anagrafica.label.unique())  
+print("-----")
+vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab) 
+input(vanilla_df.head(30))
+vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len(vanilla_df.columns)-3, hidden_size=1)
+grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True).apply(lambda x: x)
+print("GROUPBY")
+input(grouped_vanilla.head(30))
+inputs = []
+labels = []
+for name, group in grouped_vanilla:
+    print(name)
+    print(group )
+    input("ok")
+    vanilla_patient_hystory = group.sort_values(by=["data"])
+    print(group["label"].values)
+    labels.append(torch.tensor(group["label"].values))
+    vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
+#    #vanilla_model().detatch()
+    inputs.append(torch.tensor(group.values))
+    #vanilla_model.forward(torch.tensor(group.values))
+    #vanilla_model.forward(tuple_dataset)
+
+inputs = torch.tensor(inputs)
+labels = torch.tensor(labels)
+vanilla_dataset = Vanilla_LSTM.TensorDataset(inputs, labels)
+print(vanilla_dataset)
+print(len(vanilla_dataset))
+input("PREMI ENTER")
+dataloader = Vanilla_LSTM.DataLoader(vanilla_dataset, batch_size=16, shuffle=True)
+
+Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, dataloader)
+
+
+
+exit()
 tuple_dataset = []
 load_dataset = False
 if load_dataset:
