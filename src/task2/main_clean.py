@@ -45,7 +45,7 @@ READ_DATA_PATH = "clean_data"
 PRESCRIZIONI = False
 LOAD_DATASET = True
 PARALLEL_LOAD_DATASET = True
-WRITE_DATASET = False
+WRITE_DATASET = True
 
 if PRESCRIZIONI:
     file_names = [
