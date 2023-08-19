@@ -2,6 +2,7 @@ import pandas as pd
 import concurrent.futures as futures
 import multiprocessing
 import os
+import re
 
 import pickle
 import numpy as np
@@ -17,7 +18,7 @@ import torch
 
 from torch.utils.data import DataLoader
 from transformers import (
-    AdamW,  # this does not work
+    # AdamW,  # this does not work
     AutoConfig,
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -42,7 +43,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
 PRESCRIZIONI = False
-LOAD_DATASET = False
+LOAD_DATASET = True
+PARALLEL_LOAD_DATASET = True
 WRITE_DATASET = False
 
 if PRESCRIZIONI:
@@ -563,32 +565,9 @@ if LOAD_DATASET:
     ]
 
     # import time
-
     # start_time = time.time()
 
-    # to mulprocess in a multiprocess but doesn't work out
-    # def process_patient_dataframe(list_of_df):
-    #     name, df, patient = list_of_df
-    #     # Filter the rows based on patient's ID and sort by date
-    #     df_filtered = df.loc[
-    #         (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
-    #     ].sort_values(by="date")
-
-    #     # Extract relevant information
-    #     info = [
-    #         f"{row},".replace("Pandas", "")
-    #         .replace("Timestamp(", "")
-    #         .replace("(", "")
-    #         .replace(")", "")
-    #         .replace("'", "")
-    #         for row in df_filtered.itertuples(index=False)
-    #     ]
-
-    #     # Add the formatted information to the temp list
-    #     return [f"{name}:"] + info
-
     def create_history_string(patient):
-        # TODO remove all the : and , from the string to understand if it changes the performance
         df_anagrafica_filtered = df_anagrafica_no_label.loc[
             (df_anagrafica_no_label["idcenter"] == patient[0])
             & (df_anagrafica_no_label["idpatient"] == patient[1])
@@ -596,10 +575,16 @@ if LOAD_DATASET:
 
         history = "".join(
             [
-                f"{row}, ".replace("(", ": ", 1)
-                .replace("Timestamp(", "")
-                .replace(")", "")
-                .replace("'", "")
+                re.sub(
+                    r"\s*idpatient\s*-*\d+,*|\s*00:00:00",
+                    "",
+                    f"{row}, ".replace("(", " ", 1)
+                    .replace("Timestamp(", "")
+                    .replace(")", "")
+                    .replace("'", "")
+                    .replace(",", "")
+                    .replace("=", " "),
+                )
                 for row in df_anagrafica_filtered.itertuples(
                     index=False, name="patientregistry"
                 )
@@ -607,71 +592,68 @@ if LOAD_DATASET:
         )
 
         temp = []
-        # I can't multiprocess in a function that is called by a multiprocessed function
-        # triple = [(k, v, patient) for k, v in list_of_df.items()]
-        # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        #     temp = pool.map(process_patient_dataframe, triple)
-
         # Iterate over each DataFrame in the dictionary list_of_df
         for name, df in list_of_df.items():
             # Filter the rows based on patient's ID and sort by date
             df_filtered = df.loc[
                 (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
-            ].sort_values(by="date")
+            ].sort_values(by="date", ascending=False)
 
             # Extract relevant information
             info = [
-                f"{row},".replace("Pandas", "")
-                .replace("Timestamp(", "")
-                .replace("(", "")
-                .replace(")", "")
-                .replace("'", "")
+                re.sub(
+                    r"\s*idpatient\s*-*\d+,*\s*|\s*idcenter\s*-*\d+,*\s*|\s*00:00:00|Pandas|Timestamp\(|\(|\)|'|,",
+                    "",
+                    f"{row},".replace("=", " "),
+                )
                 for row in df_filtered.itertuples(index=False)
             ]
 
             # Add the formatted information to the temp list
-            temp.extend([f"{name}:"] + info)
+            temp.extend([f"{name}"] + info)
 
         # Combine the elements in the temp list into a single string
         history += " ".join(temp)
-
         return history
 
-    # sequential version
-    # for i, patient in enumerate(
-    #     df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
-    # ):
-    #     # print(i)
-    #     # Get patient history as a string from df_anagrafica and other DataFrames
-    #     history_of_patient = create_history_string(patient)
+    if not (PARALLEL_LOAD_DATASET):
+        # sequential version
+        for i, patient in enumerate(
+            df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
+        ):
+            # print(i)
+            # Get patient history as a string from df_anagrafica and other DataFrames
+            history_of_patient = create_history_string(patient)
 
-    #     # Get label
-    #     label = int(
-    #         df_anagrafica.loc[
-    #             (df_anagrafica["idcenter"] == patient[0])
-    #             & (df_anagrafica["idpatient"] == patient[1])
-    #         ]["label"].item()
-    #     )
+            # Get label
+            label = int(
+                df_anagrafica.loc[
+                    (df_anagrafica["idcenter"] == patient[0])
+                    & (df_anagrafica["idpatient"] == patient[1])
+                ]["label"].item()
+            )
 
-    #     tuple_dataset.append((history_of_patient, label))
+            tuple_dataset.append((history_of_patient, label))
+    elif PARALLEL_LOAD_DATASET:
+        # parallel version
+        # Okay this code with a pc of 12 core is resonable fast, 1000 patient in 11 seconds
+        # so I estimate a total of 15 minutes for all the patient
+        def process_patient(patient):
+            history_of_patient = create_history_string(patient)
+            label = int(
+                df_anagrafica.loc[
+                    (df_anagrafica["idcenter"] == patient[0])
+                    & (df_anagrafica["idpatient"] == patient[1])
+                ]["label"].item()
+            )
+            return (history_of_patient, label)
 
-    # parallel version
-    # Okay this code with a pc of 12 core is resonable fast, 1000 patient in 11 seconds
-    # so I estimate a total of 15 minutes for all the patient
-    def process_patient(patient):
-        history_of_patient = create_history_string(patient)
-        label = int(
-            df_anagrafica.loc[
-                (df_anagrafica["idcenter"] == patient[0])
-                & (df_anagrafica["idpatient"] == patient[1])
-            ]["label"].item()
+        patients = (
+            df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:20].values
         )
-        return (history_of_patient, label)
 
-    patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates().values
-
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        tuple_dataset = pool.map(process_patient, patients)
+        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+            tuple_dataset = pool.map(process_patient, patients)
 
     print("dataset: ", len(tuple_dataset))
     # dataset now contains a list of tuples, each containing the patient history string and their label
@@ -681,12 +663,11 @@ if LOAD_DATASET:
     # execution_time = end_time - start_time
     # print(f"Execution Time: {execution_time:.6f} seconds")
     if WRITE_DATASET:
-        with open("dataset.pkl", "wb") as f:
+        with open("dataset_clean.pkl", "wb") as f:
             pickle.dump(tuple_dataset, f)
         print("stored dataset")
-
-if not (LOAD_DATASET):
-    with open("dataset.pkl", "rb") as f:
+else:
+    with open("dataset_clean.pkl", "rb") as f:
         tuple_dataset = pickle.load(f)
 
     print("loaded dataset")
