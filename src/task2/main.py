@@ -11,6 +11,8 @@ from pytorch_lightning import (
     Trainer,
     seed_everything,
 )
+from pytorch_lightning.callbacks import ModelCheckpoint
+
 import torch
 
 from torch.utils.data import DataLoader
@@ -26,14 +28,14 @@ import datasets
 from datetime import datetime
 
 # import evaluate
-from torchmetrics.classification import BinaryAccuracy
+from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 SEED = 0
 rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
-seed_everything(SEED)
+seed_everything(SEED, workers=True)
 MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -905,8 +907,10 @@ class PubMedBERTTransformer(LightningModule):
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_name_or_path, config=self.config
         )
-        self.metric = BinaryAccuracy()
-        self.validation_step_outputs = []
+        self.train_acc_metric = BinaryAccuracy()
+        self.val_acc_metric = BinaryAccuracy()
+        self.train_f1_metric = BinaryF1Score()
+        self.val_f1_metric = BinaryF1Score()
 
     def forward(self, **inputs):
         return self.model(**inputs)
@@ -914,53 +918,44 @@ class PubMedBERTTransformer(LightningModule):
     def step(self, batch):
         outputs = self(**batch)
         loss, logits = outputs[:2]
-        # if self.hparams.num_labels > 1:
-        preds = logits.argmax(axis=1)
-        # elif self.hparams.num_labels == 1:
-        #    preds = logits.squeeze()
+        if self.hparams.num_labels > 1:
+            preds = logits.argmax(axis=1)
+        elif self.hparams.num_labels == 1:
+            preds = logits.squeeze()
         labels = batch["labels"]
         return {"loss": loss, "logits": logits, "preds": preds, "labels": labels}
 
     def training_step(self, batch, batch_idx):
         outputs = self.step(batch)
-        value = self.metric(outputs["preds"], outputs["labels"])
-        self.log("train_acc", value, on_epoch=True)
-        self.log("train_loss", outputs["loss"], prog_bar=True)
+        self.train_acc_metric(outputs["preds"], outputs["labels"])
+        self.train_f1_metric(outputs["preds"], outputs["labels"])
+        self.log(
+            "train_acc",
+            self.train_acc_metric,
+            on_step=True,
+            on_epoch=True,
+            prog_bar=True,
+        )
+        self.log(
+            "train_f1", self.train_f1_metric, on_step=True, on_epoch=True, prog_bar=True
+        )
+        self.log(
+            "train_loss", outputs["loss"], on_step=True, on_epoch=True, prog_bar=True
+        )
         return outputs["loss"]
 
-    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+    def validation_step(self, batch, batch_idx):
         outputs = self.step(batch)
-        # self.validation_step_outputs.append(preds)
-        value = self.metric(outputs["preds"], outputs["labels"])
-        self.log("val_acc", value, on_epoch=True)
-        self.log("val_loss", outputs["loss"], prog_bar=True)
+        self.val_acc_metric(outputs["preds"], outputs["labels"])
+        self.val_f1_metric(outputs["preds"], outputs["labels"])
+        self.log("val_acc", self.val_acc_metric, on_epoch=True, prog_bar=True)
+        self.log("val_f1", self.val_f1_metric, on_epoch=True, prog_bar=True)
+        self.log("val_loss", outputs["loss"], on_epoch=True, prog_bar=True)
         return {
             "loss": outputs["loss"],
             "preds": outputs["preds"],
             "labels": outputs["labels"],
         }
-
-    # def on_validation_epoch_end(self):
-    # print("on_validation_epoch_end")
-    # print(self.validation_step_outputs)
-    # preds = (
-    #     torch.cat([x["preds"] for x in self.validation_step_outputs])
-    #     .detach()
-    #     .cpu()
-    #     .numpy()
-    # )
-    # labels = (
-    #     torch.cat([x["labels"] for x in self.validation_step_outputs])
-    #     .detach()
-    #     .cpu()
-    #     .numpy()
-    # )
-    # loss = torch.stack([x["loss"] for x in self.validation_step_outputs]).mean()
-    # self.log("val_loss", loss, prog_bar=True)
-    # self.log_dict(
-    #     self.metric.compute(predictions=preds, references=labels), prog_bar=True
-    # )
-    # self.validation_step_outputs.clear()  # free memory
 
     def configure_optimizers(self):
         """Prepare optimizer and schedule (linear warmup and decay)"""
@@ -1008,10 +1003,15 @@ def evaluate_PubMedBERT():
         model_name_or_path=MODEL_NAME,
     )
 
+    checkpoint_callback = ModelCheckpoint(monitor="val_f1", mode="max")
+
     trainer = Trainer(
         max_epochs=3,
         accelerator="auto",
         devices="auto",
+        benchmark=True,
+        precision=32,
+        callbacks=[checkpoint_callback],
     )
     trainer.fit(model=model, datamodule=dm)
 
