@@ -648,9 +648,7 @@ if LOAD_DATASET:
             )
             return (history_of_patient, label)
 
-        patients = (
-            df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:20].values
-        )
+        patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates().values
 
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             tuple_dataset = pool.map(process_patient, patients)
