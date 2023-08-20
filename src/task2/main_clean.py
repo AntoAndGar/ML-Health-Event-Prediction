@@ -15,6 +15,7 @@ from pytorch_lightning import (
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 import torch
+import datasets
 
 from torch.utils.data import DataLoader
 from transformers import (
@@ -25,10 +26,6 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-import datasets
-from datetime import datetime
-
-# import evaluate
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -43,9 +40,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
 PRESCRIZIONI = False
-LOAD_DATASET = True
+CREATE_DATASET = False
 PARALLEL_LOAD_DATASET = True
-WRITE_DATASET = True
+WRITE_DATASET = False
 
 if PRESCRIZIONI:
     file_names = [
@@ -345,7 +342,7 @@ elif balancing == "standard":
 
 tuple_dataset = []
 
-if LOAD_DATASET:
+if CREATE_DATASET:
     amd = pd.read_csv("amd_codes_for_bert.csv").rename({"codice": "codiceamd"}, axis=1)
     atc = pd.read_csv("atc_info_nodup.csv")
     # Converting Dataset for Deep Learning purposes
@@ -989,7 +986,7 @@ def evaluate_PubMedBERT():
         accelerator="auto",
         devices="auto",
         benchmark=True,
-        precision=32,
+        precision="16-mixed",
         callbacks=[checkpoint_callback],
     )
     trainer.fit(model=model, datamodule=dm)
