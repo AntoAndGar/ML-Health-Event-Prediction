@@ -1,23 +1,26 @@
-import pandas as pd
 import concurrent.futures as futures
+import datasets
 import multiprocessing
+import numpy as np
+import pandas as pd
+import pickle
 import os
 import re
+import torch
 
-import pickle
-import numpy as np
 from pytorch_lightning import (
     LightningDataModule,
     LightningModule,
     Trainer,
     seed_everything,
 )
+
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-import torch
-import datasets
-
 from torch.utils.data import DataLoader
+
+from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
+
 from transformers import (
     # AdamW,  # this does not work
     AutoConfig,
@@ -25,8 +28,6 @@ from transformers import (
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-
-from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -39,10 +40,12 @@ MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
-PRESCRIZIONI = False
+PRESCRIZIONI = True
 CREATE_DATASET = False
 PARALLEL_LOAD_DATASET = True
 WRITE_DATASET = False
+
+BALANCING = "standard"
 
 if PRESCRIZIONI:
     file_names = [
@@ -53,7 +56,7 @@ if PRESCRIZIONI:
         "esamistrumentali_c_pres",
         "prescrizionidiabetefarmaci_c_pres",
         "prescrizionidiabetenonfarmaci_c_pres",
-        "prescrizioninondiabete_c",
+        "prescrizioninondiabete_c_pres",
     ]
 else:
     file_names = [
@@ -67,139 +70,122 @@ else:
         "prescrizioninondiabete_c",
     ]
 
+AMD_OF_CARDIOVASCULAR_EVENT = [
+    "AMD047",
+    "AMD048",
+    "AMD049",
+    "AMD071",
+    "AMD081",
+    "AMD082",
+    "AMD208",
+    "AMD303",
+]
 
 def read_csv(filename):
     return pd.read_csv(filename, header=0)
 
-
 print("Generating Futures...")
-# read all the dataset concurrently and store them in a dictionary with the name of the file as key
+
+# Read all the dataset concurrently and store them in a dictionary with the name of the file as key
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
     for name in file_names:
         df_list[str(name)] = executor.submit(read_csv, f"{READ_DATA_PATH}/{name}.csv")
 
 print("Loading data...")
-# Load dataset
+
 if PRESCRIZIONI:
     df_anagrafica = df_list["anagraficapazientiattivi_c_pres"].result()
     df_diagnosi = df_list["diagnosi_c_pres"].result()
-    df_esami_par = df_list["esamilaboratorioparametri_c_pres"].result()
-    df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c_pres"].result()
+    df_esami_lab_par = df_list["esamilaboratorioparametri_c_pres"].result()
+    df_esami_lab_par_cal = df_list["esamilaboratorioparametricalcolati_c_pres"].result()
     df_esami_stru = df_list["esamistrumentali_c_pres"].result()
-    df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c_pres"].result()
-    df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c_pres"].result()
-    df_pre_no_diab = df_list["prescrizioninondiabete_c_pres"].result()
+    df_pres_diab_farm = df_list["prescrizionidiabetefarmaci_c_pres"].result()
+    df_pres_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c_pres"].result()
+    df_pres_no_diab = df_list["prescrizioninondiabete_c_pres"].result()
 else:
     df_anagrafica = df_list["anagraficapazientiattivi_c"].result()
     df_diagnosi = df_list["diagnosi_c"].result()
-    df_esami_par = df_list["esamilaboratorioparametri_c"].result()
-    df_esami_par_cal = df_list["esamilaboratorioparametricalcolati_c"].result()
+    df_esami_lab_par = df_list["esamilaboratorioparametri_c"].result()
+    df_esami_lab_par_cal = df_list["esamilaboratorioparametricalcolati_c"].result()
     df_esami_stru = df_list["esamistrumentali_c"].result()
-    df_pre_diab_farm = df_list["prescrizionidiabetefarmaci_c"].result()
-    df_pre_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c"].result()
-    df_pre_no_diab = df_list["prescrizioninondiabete_c"].result()
+    df_pres_diab_farm = df_list["prescrizionidiabetefarmaci_c"].result()
+    df_pres_diab_no_farm = df_list["prescrizionidiabetenonfarmaci_c"].result()
+    df_pres_no_diab = df_list["prescrizioninondiabete_c"].result()
 
 list_of_df = [
     df_diagnosi,
-    df_esami_par,
-    df_esami_par_cal,
+    df_esami_lab_par,
+    df_esami_lab_par_cal,
     df_esami_stru,
-    df_pre_diab_farm,
-    df_pre_diab_no_farm,
-    df_pre_no_diab,
+    df_pres_diab_farm,
+    df_pres_diab_no_farm,
+    df_pres_no_diab,
 ]
 
-
-## Cast string to datatime
+# Casting "data" features to datetime in all tables except "anagrafica"
 def cast_to_datetime(df, col, format="%Y-%m-%d"):
     df[col] = pd.to_datetime(df[col], format=format)
     return df[col]
 
-
-for col in ["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"]:
-    df_anagrafica[col] = cast_to_datetime(df_anagrafica, col, format="%Y-%m-%d")
-
-## Cast string to datetime
 for df in list_of_df:
     df["data"] = cast_to_datetime(df, "data", format="%Y-%m-%d")
 
-del file_names, read_csv, df_list
+# Casting also "anagrafica" dates
+for col in ["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"]:
+    df_anagrafica[col] = cast_to_datetime(df_anagrafica, col, format="%Y-%m-%d")
 
-### Point 2.1 ####
-print("Point 2.1")
-# print(df_anagrafica.head())
-print(df_anagrafica.label.value_counts())
+del file_names, df_list
 
-df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == 0]
-df_anagrafica_label_1 = df_anagrafica[df_anagrafica.label == 1]
+#######################################
+############### STEP 1 ################
+#######################################
 
-select_all_events = pd.concat(
+print("########## STEP 1 ##########")
+
+df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == False]
+df_anagrafica_label_1 = df_anagrafica[df_anagrafica.label == True]
+
+print(f"Number of records in anagrafica that have label equal to 0: {len(df_anagrafica_label_0)}")
+print(f"Number of records in anagrafica that have label equal to 1: {len(df_anagrafica_label_1)}")
+
+esami_and_prescrizioni_concat = pd.concat(
     objs=(
-        idf.set_index(["idana", "idcentro"])
-        for idf in [
-            df_diagnosi[["idana", "idcentro", "data"]],
-            df_esami_par[["idana", "idcentro", "data"]],
-            df_esami_par_cal[["idana", "idcentro", "data"]],
-            df_esami_stru[["idana", "idcentro", "data"]],
-        ]
-    ),
-    # ignore_index=True,
-    join="inner",
+        df_diagnosi[["idana", "idcentro", "data"]], 
+        df_esami_lab_par[["idana", "idcentro", "data"]], 
+        df_esami_lab_par_cal[["idana", "idcentro", "data"]], 
+        df_esami_stru[["idana", "idcentro", "data"]], 
+        df_pres_diab_farm[["idana", "idcentro", "data"]], 
+        df_pres_diab_no_farm[["idana", "idcentro", "data"]], 
+        df_pres_no_diab[["idana", "idcentro", "data"]],
+    )
 )
 
-# print(select_all_events)
-# select_all_events["data"] = pd.to_datetime(select_all_events["data"], format="%Y-%m-%d")
+last_event = esami_and_prescrizioni_concat.groupby(["idana", "idcentro"]).max()
 
-last_event = select_all_events.groupby(["idana", "idcentro"], group_keys=True)[
-    "data"
-].max()
+last_event_label_0_keys = df_anagrafica_label_0[["idana", "idcentro"]].merge(last_event, on=["idana", "idcentro"])
 
-# NOTE: I think the prof is wrong in the project description and here we must delete the last 6 months
-# of patient with label 1
-last_event_patient_label_1 = df_anagrafica_label_1.join(
-    last_event, on=["idana", "idcentro"]
-)
-
-
-def dropLastSixMonths(df: pd.DataFrame) -> pd.DataFrame:
-    df_last_event_label_1 = df.merge(
-        last_event_patient_label_1,
+def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
+    df_label_0_last_event = df.merge(
+        last_event_label_0_keys,
         on=["idana", "idcentro"],
         how="left",
         suffixes=("_left", "_right"),
     )
-    # TODO: here is < or <= ?
-    temp = df_last_event_label_1["data_left"] < (
-        df_last_event_label_1["data_right"] - pd.DateOffset(months=6)
-    )
-    df = (
-        df_last_event_label_1[temp]
-        .drop(columns=["data_right"])
-        .rename(columns={"data_left": "data"})
-    )
+
+    temp = df_label_0_last_event["data_left"] < (df_label_0_last_event["data_right"] - pd.Timedelta(days=186))
+    
+    df = df_label_0_last_event[temp].drop(columns=["data_right"]).rename(columns={"data_left": "data"})
+    
     return df
 
+df_diagnosi_cardio_filtered = df_diagnosi[df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)]
 
-print("Before: ", len(df_diagnosi))
-df_diagnosi = dropLastSixMonths(df_diagnosi)
-print("After: ", len(df_diagnosi))
+last_problem = df_diagnosi_cardio_filtered[["idana", "idcentro", "data"]].groupby(["idana", "idcentro"]).max()
 
-print("Before: ", len(df_esami_par))
-df_esami_par = dropLastSixMonths(df_esami_par)
-print("After: ", len(df_esami_par))
+last_problem_label_1_keys = df_anagrafica_label_1[["idana", "idcentro"]].merge(last_problem, on=["idana", "idcentro"])
 
-print("Before: ", len(df_esami_par_cal))
-df_esami_par_cal = dropLastSixMonths(df_esami_par_cal)
-print("After: ", len(df_esami_par_cal))
-
-print("Before: ", len(df_esami_stru))
-df_esami_stru = dropLastSixMonths(df_esami_stru)
-print("After: ", len(df_esami_stru))
-
-balancing = "standard"
-
-if balancing == "lossy":
+if BALANCING == "lossy":
     temp_balanced_aa = df_anagrafica_label_1.sample(
         n=len(df_anagrafica_label_0), random_state=rng
     )
@@ -209,26 +195,26 @@ if balancing == "lossy":
     df_diagnosi = df_diagnosi.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
-    df_esami_par = df_esami_par.merge(
+    df_esami_lab_par = df_esami_lab_par.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
-    df_esami_par_cal = df_esami_par_cal.merge(
+    df_esami_lab_par_cal = df_esami_lab_par_cal.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
     df_esami_stru = df_esami_stru.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
-    df_pre_diab_farm = df_pre_diab_farm.merge(
+    df_pres_diab_farm = df_pres_diab_farm.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
-    df_pre_diab_no_farm = df_pre_diab_no_farm.merge(
+    df_pres_diab_no_farm = df_pres_diab_no_farm.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
-    df_pre_no_diab = df_pre_no_diab.merge(
+    df_pres_no_diab = df_pres_no_diab.merge(
         balanced_aa_keys, on=["idcentro", "idana"], how="inner"
     )
 
-elif balancing == "standard":
+elif BALANCING == "standard":
     # TODO: check if this is correct, because to me it seems silly that we have
     # to modify values with labels 1 to make them 0, at the end the model
     # will be confused by this
@@ -275,9 +261,9 @@ elif balancing == "standard":
         new_dup_record["data"] = new_dup_record["data"] + noise
         # TODO: while here we are adding noise to the date, we should ensure that the new date is not
         # in the 6 months after last event, to ensure we are not creating other False.
-        # Maybe do also here a dropLastSixMonths? nah this is improbable to happen because the
+        # Maybe do also here a drop_last_six_months? nah this is improbable to happen because the
         # noise is small and also the probability of having a date in the 6 months after the last event
-        # new_dup_record = dropLastSixMonths(new_dup_record)
+        # new_dup_record = drop_last_six_months(new_dup_record)
 
         # the idana is negative for th duplicate to easly distinguish it from the original
         # the 10000 is a number greather than the max value of number of patient in each idcentro
@@ -328,13 +314,13 @@ elif balancing == "standard":
     df_diagnosi = balance(df_diagnosi, 0.50)
     print("After balance: ", len(df_diagnosi))
 
-    print("Before balance: ", len(df_esami_par))
-    df_esami_par = balance(df_esami_par, 0.50)
-    print("After balance: ", len(df_esami_par))
+    print("Before balance: ", len(df_esami_lab_par))
+    df_esami_lab_par = balance(df_esami_lab_par, 0.50)
+    print("After balance: ", len(df_esami_lab_par))
 
-    print("Before balance: ", len(df_esami_par_cal))
-    df_esami_par_cal = balance(df_esami_par_cal, 0.50)
-    print("After balance: ", len(df_esami_par_cal))
+    print("Before balance: ", len(df_esami_lab_par_cal))
+    df_esami_lab_par_cal = balance(df_esami_lab_par_cal, 0.50)
+    print("After balance: ", len(df_esami_lab_par_cal))
 
     print("Before balance: ", len(df_esami_stru))
     df_esami_stru = balance(df_esami_stru, 0.50)
@@ -404,9 +390,9 @@ if CREATE_DATASET:
         .fillna("[UNK]")
     )
 
-    df_esami_par = df_esami_par.merge(amd, on="codiceamd", how="left")
-    df_esami_par = (
-        df_esami_par[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
+    df_esami_lab_par = df_esami_lab_par.merge(amd, on="codiceamd", how="left")
+    df_esami_lab_par = (
+        df_esami_lab_par[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
         .rename(
             {
                 "idcentro": "idcenter",
@@ -421,9 +407,9 @@ if CREATE_DATASET:
         .fillna("[UNK]")
     )
 
-    df_esami_par_cal = df_esami_par_cal.merge(amd, on="codiceamd", how="left")
-    df_esami_par_cal = (
-        df_esami_par_cal[
+    df_esami_lab_par_cal = df_esami_lab_par_cal.merge(amd, on="codiceamd", how="left")
+    df_esami_lab_par_cal = (
+        df_esami_lab_par_cal[
             [
                 "idcentro",
                 "idana",
@@ -467,8 +453,8 @@ if CREATE_DATASET:
     )
 
     # this is the only one that has the codiceatc column and no codice amd
-    df_pre_diab_farm = (
-        df_pre_diab_farm.merge(
+    df_pres_diab_farm = (
+        df_pres_diab_farm.merge(
             atc[["codiceatc", "atc_nome"]], on="codiceatc", how="left"
         )[
             [
@@ -498,9 +484,9 @@ if CREATE_DATASET:
         .fillna("[UNK]")
     )
 
-    df_pre_diab_no_farm = df_pre_diab_no_farm.merge(amd, on="codiceamd", how="left")
-    df_pre_diab_no_farm = (
-        df_pre_diab_no_farm[
+    df_pres_diab_no_farm = df_pres_diab_no_farm.merge(amd, on="codiceamd", how="left")
+    df_pres_diab_no_farm = (
+        df_pres_diab_no_farm[
             ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
         ]
         .rename(
@@ -517,9 +503,9 @@ if CREATE_DATASET:
         .fillna("[UNK]")
     )
 
-    df_pre_no_diab = df_pre_no_diab.merge(amd, on="codiceamd", how="left")
-    df_pre_no_diab = (
-        df_pre_no_diab[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
+    df_pres_no_diab = df_pres_no_diab.merge(amd, on="codiceamd", how="left")
+    df_pres_no_diab = (
+        df_pres_no_diab[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
         .rename(
             {
                 "idcentro": "idcenter",
@@ -538,12 +524,12 @@ if CREATE_DATASET:
 
     list_of_df = {
         "diagnosis": df_diagnosi,
-        "exam parameter": df_esami_par,
-        "exam parameter calculated": df_esami_par_cal,
+        "exam parameter": df_esami_lab_par,
+        "exam parameter calculated": df_esami_lab_par_cal,
         "exam strumental": df_esami_stru,
-        "prescription diabete drugs": df_pre_diab_farm,
-        "prescription diabete not drugs": df_pre_diab_no_farm,
-        "prescription not diabete": df_pre_no_diab,
+        "prescription diabete drugs": df_pres_diab_farm,
+        "prescription diabete not drugs": df_pres_diab_no_farm,
+        "prescription not diabete": df_pres_no_diab,
     }
 
     df_anagrafica_no_label = df_anagrafica[
