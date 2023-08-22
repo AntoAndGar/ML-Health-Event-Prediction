@@ -241,41 +241,6 @@ if PRESCRIZIONI:
 
 # for positive patient we must drop only the cardiovascular event
 # in the last 6 month insead of all history, this is a request from specifics
-# df_diagnosi_cardio_filtered = df_diagnosi[
-#     df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)
-# ]
-
-# print(df_diagnosi_cardio_filtered)
-
-# df_diagnosi_cardio_filtered = df_diagnosi_cardio_filtered.merge(
-#     df_anagrafica_label_1[["idana", "idcentro"]],
-#     on=["idana", "idcentro"],
-#     how="inner",
-# )
-
-# print(df_diagnosi_cardio_filtered)
-
-# last_event_label_1_keys = df_anagrafica_label_1[["idana", "idcentro"]].merge(
-#     last_event, on=["idana", "idcentro"]
-# )
-
-# print(last_event_label_1_keys)
-
-# df_label_1_last_event = df_diagnosi_cardio_filtered.merge(
-#     last_event_label_1_keys,
-#     on=["idana", "idcentro"],
-#     how="left",
-#     suffixes=("_left", "_right"),
-# )
-
-# print(df_label_1_last_event)
-
-# temp = df_label_1_last_event[
-#     df_label_1_last_event["data_left"]
-#     >= (df_label_1_last_event["data_right"] - pd.Timedelta(days=186))
-# ]
-# print(temp)
-
 print("Diagnosis before: ", len(df_diagnosi))
 
 df_diagnosi = df_diagnosi.merge(
@@ -299,6 +264,8 @@ df_diagnosi = (
 )
 
 print("Diagnosis after: ", len(df_diagnosi))
+
+del last_event, last_event_label_0_keys
 
 if BALANCING == "lossy":
     temp_balanced_aa = df_anagrafica_label_1.sample(
@@ -364,12 +331,12 @@ elif BALANCING == "standard":
             on=["idana", "idcentro"],
             how="inner",
         )
-        # shuffle and delete events at random
+        # delete events at random
         new_dup_record = new_dup_record[new_dup_record["duplicated"]].sample(
             frac=fraction, random_state=rng
         )
 
-        # shuffle data
+        # shuffle events data
         noise = pd.to_timedelta(
             rng.normal(0, 5, len(new_dup_record)).astype("int"), unit="d"
         )
@@ -410,14 +377,6 @@ elif BALANCING == "standard":
         + 100000 * new_dup_record["duplicate_identifier"].astype("int")
     )
 
-    # Yes you can fix this if yoiu prefer but to me the code is unreadable to do so
-    # FIXME: A value is trying to be set on a copy of a slice from a DataFrame.
-    #       Try using .loc[row_indexer,col_indexer] = value instead
-    #
-    #       See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
-    #       new_dup_record["label"] = False
-    new_dup_record["label"] = False
-
     new_dup_record = new_dup_record.drop(["duplicate_identifier", "duplicated"], axis=1)
     df_anagrafica = pd.concat([df_anagrafica, new_dup_record], ignore_index=True)
     print("After balance: ", len(df_anagrafica))
@@ -440,6 +399,19 @@ elif BALANCING == "standard":
     print("Before balance: ", len(df_esami_stru))
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
+
+    if PRESCRIZIONI:
+        print("Before balance: ", len(df_pres_diab_farm))
+        df_pres_diab_farm = balance(df_pres_diab_farm, 0.50)
+        print("After balance: ", len(df_pres_diab_farm))
+
+        print("Before balance: ", len(df_pres_diab_no_farm))
+        df_pres_diab_no_farm = balance(df_pres_diab_no_farm, 0.50)
+        print("After balance: ", len(df_pres_diab_no_farm))
+
+        print("Before balance: ", len(df_pres_no_diab))
+        df_pres_no_diab = balance(df_pres_no_diab, 0.50)
+        print("After balance: ", len(df_pres_no_diab))
 
 tuple_dataset = []
 
