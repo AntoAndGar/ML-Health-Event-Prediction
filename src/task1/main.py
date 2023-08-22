@@ -300,15 +300,30 @@ df_anagrafica_attivi_primo_accesso_nan = df_anagrafica_attivi[
 
 esami_and_prescrizioni_concat = pd.concat(
     objs=(
-        df_diagnosi[["idana", "idcentro", "data"]],
-        df_esami_lab_par[["idana", "idcentro", "data"]],
-        df_esami_lab_par_cal[["idana", "idcentro", "data"]],
-        df_esami_strumentali[["idana", "idcentro", "data"]],
-        df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]],
-        df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
-        df_prescrizioni_non_diabete[["idana", "idcentro", "data"]],
-    )
-)
+        idf.set_index(["idana", "idcentro"])
+        for idf in [
+            df_diagnosi[["idana", "idcentro", "data"]],
+            df_esami_lab_par[["idana", "idcentro", "data"]],
+            df_esami_lab_par_cal[["idana", "idcentro", "data"]],
+            df_esami_strumentali[["idana", "idcentro", "data"]],
+        ]
+    ),
+    join="inner",
+).reset_index()
+
+if PRESCRIZIONI:
+    esami_and_prescrizioni_concat = pd.concat(
+        objs=(
+            idf.set_index(["idana", "idcentro"])
+            for idf in [
+                esami_and_prescrizioni_concat[["idana", "idcentro", "data"]],
+                df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]],
+                df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
+                df_prescrizioni_non_diabete[["idana", "idcentro", "data"]],
+            ]
+        ),
+        join="inner",
+    ).reset_index()
 
 esami_and_prescrizioni_grouped = esami_and_prescrizioni_concat.groupby(
     ["idana", "idcentro"]
@@ -534,22 +549,30 @@ print("########## STEP 3 ##########")
 # First of all we need to combine all the tables regarding patients events
 esami_and_prescrizioni_concat = pd.concat(
     objs=(
-        df_diagnosi[["idana", "idcentro", "data"]],
-        df_esami_lab_par[["idana", "idcentro", "data"]],
-        df_esami_lab_par_cal[["idana", "idcentro", "data"]],
-        df_esami_strumentali[["idana", "idcentro", "data"]],
-    )
-)
+        idf.set_index(["idana", "idcentro"])
+        for idf in [
+            df_diagnosi[["idana", "idcentro", "data"]],
+            df_esami_lab_par[["idana", "idcentro", "data"]],
+            df_esami_lab_par_cal[["idana", "idcentro", "data"]],
+            df_esami_strumentali[["idana", "idcentro", "data"]],
+        ]
+    ),
+    join="inner",
+).reset_index()
 
 if PRESCRIZIONI:
     esami_and_prescrizioni_concat = pd.concat(
         objs=(
-            esami_and_prescrizioni_concat[["idana", "idcentro", "data"]],
-            df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]],
-            df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
-            df_prescrizioni_non_diabete[["idana", "idcentro", "data"]],
-        )
-    )
+            idf.set_index(["idana", "idcentro"])
+            for idf in [
+                esami_and_prescrizioni_concat[["idana", "idcentro", "data"]],
+                df_prescrizioni_diabete_farmaci[["idana", "idcentro", "data"]],
+                df_prescrizioni_diabete_non_farmaci[["idana", "idcentro", "data"]],
+                df_prescrizioni_non_diabete[["idana", "idcentro", "data"]],
+            ]
+        ),
+        join="inner",
+    ).reset_index()
 
 # Then we extract the least recent and the more recent event
 esami_and_prescrizioni_grouped = esami_and_prescrizioni_concat.groupby(

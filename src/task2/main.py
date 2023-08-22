@@ -81,8 +81,10 @@ AMD_OF_CARDIOVASCULAR_EVENT = [
     "AMD303",
 ]
 
+
 def read_csv(filename):
     return pd.read_csv(filename, header=0)
+
 
 print("Generating Futures...")
 
@@ -123,10 +125,12 @@ list_of_df = [
     df_pres_no_diab,
 ]
 
+
 # Casting "data" features to datetime in all tables except "anagrafica"
 def cast_to_datetime(df, col, format="%Y-%m-%d"):
     df[col] = pd.to_datetime(df[col], format=format)
     return df[col]
+
 
 for df in list_of_df:
     df["data"] = cast_to_datetime(df, "data", format="%Y-%m-%d")
@@ -146,25 +150,49 @@ print("########## STEP 1 ##########")
 df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == False]
 df_anagrafica_label_1 = df_anagrafica[df_anagrafica.label == True]
 
-print(f"Number of records in anagrafica that have label equal to 0: {len(df_anagrafica_label_0)}")
-print(f"Number of records in anagrafica that have label equal to 1: {len(df_anagrafica_label_1)}")
+print(
+    f"Number of records in anagrafica that have label equal to 0: {len(df_anagrafica_label_0)}"
+)
+print(
+    f"Number of records in anagrafica that have label equal to 1: {len(df_anagrafica_label_1)}"
+)
 
 esami_and_prescrizioni_concat = pd.concat(
     objs=(
-        df_diagnosi[["idana", "idcentro", "data"]], 
-        df_esami_lab_par[["idana", "idcentro", "data"]], 
-        df_esami_lab_par_cal[["idana", "idcentro", "data"]], 
-        df_esami_stru[["idana", "idcentro", "data"]], 
-        df_pres_diab_farm[["idana", "idcentro", "data"]], 
-        df_pres_diab_no_farm[["idana", "idcentro", "data"]], 
-        df_pres_no_diab[["idana", "idcentro", "data"]],
-    )
-)
+        idf.set_index(["idana", "idcentro"])
+        for idf in [
+            df_diagnosi[["idana", "idcentro", "data"]],
+            df_esami_lab_par[["idana", "idcentro", "data"]],
+            df_esami_lab_par_cal[["idana", "idcentro", "data"]],
+            df_esami_stru[["idana", "idcentro", "data"]],
+        ]
+    ),
+    join="inner",
+).reset_index()
+
+if PRESCRIZIONI:
+    esami_and_prescrizioni_concat = pd.concat(
+        objs=(
+            idf.set_index(["idana", "idcentro"])
+            for idf in [
+                esami_and_prescrizioni_concat[["idana", "idcentro", "data"]],
+                df_pres_diab_farm[["idana", "idcentro", "data"]],
+                df_pres_diab_no_farm[["idana", "idcentro", "data"]],
+                df_pres_no_diab[["idana", "idcentro", "data"]],
+            ]
+        ),
+        join="inner",
+    ).reset_index()
 
 last_event = esami_and_prescrizioni_concat.groupby(["idana", "idcentro"]).max()
 
-last_event_label_0_keys = df_anagrafica_label_0[["idana", "idcentro"]].merge(last_event, on=["idana", "idcentro"])
+last_event_label_0_keys = df_anagrafica_label_0[["idana", "idcentro"]].merge(
+    last_event, on=["idana", "idcentro"]
+)
 
+
+# for each given a dataset, drop all the rows for negative patient
+# that have a date in the last 6 months
 def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
     df_label_0_last_event = df.merge(
         last_event_label_0_keys,
@@ -173,17 +201,104 @@ def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
         suffixes=("_left", "_right"),
     )
 
-    temp = df_label_0_last_event["data_left"] < (df_label_0_last_event["data_right"] - pd.Timedelta(days=186))
-    
-    df = df_label_0_last_event[temp].drop(columns=["data_right"]).rename(columns={"data_left": "data"})
-    
+    temp = df_label_0_last_event["data_left"] >= (
+        df_label_0_last_event["data_right"] - pd.Timedelta(days=186)
+    )
+
+    df = df.drop(temp[temp].index)
+
     return df
 
-df_diagnosi_cardio_filtered = df_diagnosi[df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)]
 
-last_problem = df_diagnosi_cardio_filtered[["idana", "idcentro", "data"]].groupby(["idana", "idcentro"]).max()
+print("Before: ", len(df_diagnosi))
+df_diagnosi = drop_last_six_months(df_diagnosi)
+print("After: ", len(df_diagnosi))
 
-last_problem_label_1_keys = df_anagrafica_label_1[["idana", "idcentro"]].merge(last_problem, on=["idana", "idcentro"])
+print("Before: ", len(df_esami_lab_par))
+df_esami_lab_par = drop_last_six_months(df_esami_lab_par)
+print("After: ", len(df_esami_lab_par))
+
+print("Before: ", len(df_esami_lab_par_cal))
+df_esami_lab_par_cal = drop_last_six_months(df_esami_lab_par_cal)
+print("After: ", len(df_esami_lab_par_cal))
+
+print("Before: ", len(df_esami_stru))
+df_esami_stru = drop_last_six_months(df_esami_stru)
+print("After: ", len(df_esami_stru))
+
+if PRESCRIZIONI:
+    print("Before: ", len(df_pres_diab_farm))
+    df_pres_diab_farm = drop_last_six_months(df_pres_diab_farm)
+    print("After: ", len(df_pres_diab_farm))
+
+    print("Before: ", len(df_pres_diab_no_farm))
+    df_pres_diab_no_farm = drop_last_six_months(df_pres_diab_no_farm)
+    print("After: ", len(df_pres_diab_no_farm))
+
+    print("Before: ", len(df_pres_no_diab))
+    df_pres_no_diab = drop_last_six_months(df_pres_no_diab)
+    print("After: ", len(df_pres_no_diab))
+
+# for positive patient we must drop only the cardiovascular event
+# in the last 6 month insead of all history, this is a request from specifics
+# df_diagnosi_cardio_filtered = df_diagnosi[
+#     df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT)
+# ]
+
+# print(df_diagnosi_cardio_filtered)
+
+# df_diagnosi_cardio_filtered = df_diagnosi_cardio_filtered.merge(
+#     df_anagrafica_label_1[["idana", "idcentro"]],
+#     on=["idana", "idcentro"],
+#     how="inner",
+# )
+
+# print(df_diagnosi_cardio_filtered)
+
+# last_event_label_1_keys = df_anagrafica_label_1[["idana", "idcentro"]].merge(
+#     last_event, on=["idana", "idcentro"]
+# )
+
+# print(last_event_label_1_keys)
+
+# df_label_1_last_event = df_diagnosi_cardio_filtered.merge(
+#     last_event_label_1_keys,
+#     on=["idana", "idcentro"],
+#     how="left",
+#     suffixes=("_left", "_right"),
+# )
+
+# print(df_label_1_last_event)
+
+# temp = df_label_1_last_event[
+#     df_label_1_last_event["data_left"]
+#     >= (df_label_1_last_event["data_right"] - pd.Timedelta(days=186))
+# ]
+# print(temp)
+
+print("Diagnosis before: ", len(df_diagnosi))
+
+df_diagnosi = df_diagnosi.merge(
+    last_event, on=["idana", "idcentro"], how="left", suffixes=("_left", "_right")
+)
+
+df_diagnosi = df_diagnosi.merge(
+    df_anagrafica[["idana", "idcentro", "label"]], on=["idana", "idcentro"], how="left"
+)
+
+df_diagnosi["delete"] = (
+    (df_diagnosi["codiceamd"].isin(AMD_OF_CARDIOVASCULAR_EVENT))
+    & (df_diagnosi["label"] == True)
+    & (df_diagnosi["data_left"] >= (df_diagnosi["data_right"] - pd.Timedelta(days=186)))
+)
+
+df_diagnosi = (
+    df_diagnosi[(df_diagnosi["delete"] == False)]
+    .drop(["delete", "label", "data_right"], axis=1)
+    .rename({"data_left": "data"}, axis=1)
+)
+
+print("Diagnosis after: ", len(df_diagnosi))
 
 if BALANCING == "lossy":
     temp_balanced_aa = df_anagrafica_label_1.sample(
@@ -218,7 +333,7 @@ elif BALANCING == "standard":
     # TODO: check if this is correct, because to me it seems silly that we have
     # to modify values with labels 1 to make them 0, at the end the model
     # will be confused by this
-    duplication_factor = 2
+    duplication_factor = int(len(df_anagrafica_label_0) / len(df_anagrafica_label_1))
     # here the duplication factor is -1 because 1 time is already present in the original df
     # at which we append the duplicated df
     duplicated_df_anagrafica_label_1 = pd.concat(
@@ -392,7 +507,9 @@ if CREATE_DATASET:
 
     df_esami_lab_par = df_esami_lab_par.merge(amd, on="codiceamd", how="left")
     df_esami_lab_par = (
-        df_esami_lab_par[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
+        df_esami_lab_par[
+            ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
+        ]
         .rename(
             {
                 "idcentro": "idcenter",
@@ -522,7 +639,7 @@ if CREATE_DATASET:
 
     print("end rebuilding dataframes")
 
-    list_of_df = {
+    dict_list_of_df = {
         "diagnosis": df_diagnosi,
         "exam parameter": df_esami_lab_par,
         "exam parameter calculated": df_esami_lab_par_cal,
@@ -575,8 +692,8 @@ if CREATE_DATASET:
         )
 
         temp = []
-        # Iterate over each DataFrame in the dictionary list_of_df
-        for name, df in list_of_df.items():
+        # Iterate over each DataFrame in the dictionary dict_list_of_df
+        for name, df in dict_list_of_df.items():
             # Filter the rows based on patient's ID and sort by date
             df_filtered = df.loc[
                 (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
