@@ -44,6 +44,7 @@ PRESCRIZIONI = True
 CREATE_DATASET = False
 PARALLEL_LOAD_DATASET = True
 WRITE_DATASET = False
+DATASET_NAME = "dataset_def.pkl"
 
 BALANCING = "standard"
 
@@ -733,11 +734,11 @@ if CREATE_DATASET:
     # execution_time = end_time - start_time
     # print(f"Execution Time: {execution_time:.6f} seconds")
     if WRITE_DATASET:
-        with open("dataset_clean.pkl", "wb") as f:
+        with open(DATASET_NAME, "wb") as f:
             pickle.dump(tuple_dataset, f)
         print("stored dataset")
 else:
-    with open("dataset_clean.pkl", "rb") as f:
+    with open(DATASET_NAME, "rb") as f:
         tuple_dataset = pickle.load(f)
 
     print("loaded dataset")
