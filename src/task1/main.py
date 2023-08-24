@@ -838,6 +838,7 @@ df_anagrafica_attivi["label"] = (
     df_anagrafica_attivi["last_event"] - df_anagrafica_attivi["last_problem"]
 ) <= pd.Timedelta(days=186)
 
+
 print(df_anagrafica_attivi["label"].value_counts())
 
 # delete wanted_patient with trajectory less than 6 months
