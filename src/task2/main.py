@@ -23,7 +23,8 @@ from pytorch_lightning import (
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
+
 
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
@@ -51,6 +52,10 @@ CREATE_DATASET = False
 PARALLEL_LOAD_DATASET = True
 WRITE_DATASET = False
 DATASET_NAME = "dataset_def.pkl"
+
+# VANILLA LSTM PARAMETERS
+LOAD_VANILLA_DF: bool = True
+SAVE_VANILLA_DF: bool = True
 
 BALANCING = "standard"
 
@@ -208,18 +213,18 @@ last_event_label_0_keys = df_anagrafica_label_0[["idana", "idcentro"]].merge(
 def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
     df_label_0_last_event = df.merge(
         last_event_label_0_keys,
-
         on=["idana", "idcentro"],
         how="left",
         suffixes=("_left", "_right"),
     )
-    #temp = df_label_0_last_event["data_left"] >= (
-    #    df_label_0_last_event["data_right"] - pd.Timedelta(days=186)
-    temp = df_last_event_label_1["data_left"] < (
-        df_last_event_label_1["data_right"] - np.timedelta64(6, "M")
+
+    temp = df_label_0_last_event["data_left"] >= (
+        df_label_0_last_event["data_right"] - np.timedelta64(6, "M")
     )
+
+    '''
     df = (
-        df_last_event_label_1[temp]
+        df_label_0_last_event[temp]
         .drop(columns=["data_right",
                         "sesso",
                         "annodiagnosidiabete",
@@ -232,9 +237,8 @@ def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
                         "annodecesso"])
         .rename(columns={"data_left": "data"})
     )
-
+    '''
     df = df.drop(temp[temp].index)
-
     return df
 
 
@@ -445,78 +449,91 @@ elif BALANCING == "standard":
 #####################
 # LSTM
 #####################
-    
-val = 0.1
-test = 0.3
-train = 1 - val - test
 
+van_val = 0.1
+van_test = 0.3
+van_train = 1 - van_val - van_test
 #TODO: Converti datatime in float
 
 #TODO: Split in train, test (and validation?)
 
 
-print("\n\n\t\tSTART WORKING WITH LSTM \n\n")
+print("\nSTART WORKING WITH LSTM\n")
 
-vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab) 
-print("dataset, created")
-vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len(vanilla_df.columns)-3, hidden_size=1)
-print("model created")
-#grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True).apply(lambda x: x)
+
+
+if not LOAD_VANILLA_DF:
+    vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+    vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
+
+    if SAVE_VANILLA_DF:
+        vanilla_df.to_csv(f"appo/vanilla_df.csv", index=False)
+        print(f"vanilla_df.csv exported")
+else:
+    print("loading vanilla data")
+    vanilla_df= read_csv("appo/vanilla_df.csv")
+
+len(vanilla_df.columns)
+vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len(vanilla_df.columns)-8  , hidden_size=1)
 grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
-print("grouped")
 inputs = []
 labels = []
-dict = []
-dict2 = {}
-dict3 = {}
-firstTime = True
+max_history_len = 0
+count = 0
 for name, group in grouped_vanilla:
     vanilla_patient_hystory = group.sort_values(by=["data"])
-    labels.append(torch.tensor(group["label"].values))
-    if vanilla_patient_hystory.values.shape[0] == 1:
-        #print(vanilla_patient_hystory)
-        dict3[vanilla_patient_hystory["extra"].values[0]] = 1
-        if vanilla_patient_hystory["idana"].values[0] > 0:
-            daje = True
-            print(vanilla_patient_hystory.values)
-            if firstTime:
-                print("Fist time")
-                #print(vanilla_patient_hystory.values)
-                print(vanilla_patient_hystory.values.shape)
-                print(vanilla_patient_hystory.values.shape[0])
-                firstTime = False
-            print("DJ")
-    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["data","annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
-    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
+    labels.append(
+        group["label"].values[0]
+        )
+    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
+    nested_list = vanilla_patient_hystory.values
     inputs.append(vanilla_patient_hystory.values)
-    dict2[vanilla_patient_hystory.values.shape[0]] = dict2[vanilla_patient_hystory.values.shape[0]] + 1 if vanilla_patient_hystory.values.shape[0] in dict2 else 1
+
+    if vanilla_patient_hystory.values.shape[0] > max_history_len:
+        max_history_len = vanilla_patient_hystory.values.shape[0]
+    count += 1
+    if count >= 100:
+        break
+
+print("Max history len: ", max_history_len)
+#TODO: Tieni max gli ultimi 1200 eventi 
+from torch.nn.utils.rnn import pad_sequence
+
+tensor_list = [torch.cat((torch.zeros(max_history_len - len(sublist),13), torch.tensor(sublist))) for sublist in inputs]
+padded_tensor = pad_sequence(tensor_list, batch_first=True)
+
+bool_tensor = torch.tensor(labels, dtype=torch.bool)
+unsqueeze_labels = bool_tensor.unsqueeze(1).repeat(1, max_history_len)
 
 
-    dict.append(vanilla_patient_hystory.values.shape[0])
-    dict.append(vanilla_patient_hystory.values.shape[1])
-print("DDDJJJ")
-print(dict3)
-print("Shapes")
-print("Shapes")
-print(dict[0])
-print(dict[-1])
+# Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
+vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, unsqueeze_labels)
 
-try:
-    print("I valori")
-    vero_dict2 = list(dict.keys(dict2))
-    print(vero_dict2)
-except:
-    print("I valori non stampabili")
-print(dict2)
-#print(dict2)  
-input("inputs: ", inputs)
-inputs = torch.tensor(inputs)
-labels = torch.tensor(labels)
-vanilla_dataset = Vanilla_LSTM.TensorDataset(inputs, labels)
-dataloader = Vanilla_LSTM.DataLoader(vanilla_dataset, batch_size=16, shuffle=True)
+# Define the sizes for train, validation, and test sets
+train_size = int(van_train * len(vanilla_dataset))
+val_size = int(van_val * len(vanilla_dataset))
+test_size = len(vanilla_dataset) - train_size - val_size
 
-Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, dataloader)
+print([train_size, val_size, test_size])
+# Split the dataset into train, validation, and test sets
+vanilla_train_dataset, vanilla_val_dataset, vanilla_test_dataset = random_split(vanilla_dataset, [train_size, val_size, test_size])
 
+# Create DataLoader instances for train, validation, and test sets
+batch_size = 16  # Adjust as needed
+train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+
+print("train_loader: ", len(train_loader))
+print("val_loader: ", len(val_loader))
+print("test_loader: ", len(test_loader))
+#print("Shape train_loader: ", train_loader.dataset.shape)
+#print("Shape val_loader: ", val_loader.dataset.shape)
+#print("Shape test_loader: ", test_loader.dataset.shape)
+vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, val=vanilla_val_dataset, test=vanilla_test_dataset)
 exit()
 
 #####################

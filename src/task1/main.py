@@ -5,7 +5,7 @@ import pandas as pd
 
 WRITE_DATA_PATH = "clean_data"
 PRESCRIZIONI = True
-WRITE_CSV = False
+WRITE_CSV = True
 
 """
 AMD047: Myocardial infarction

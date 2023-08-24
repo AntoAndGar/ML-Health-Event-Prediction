@@ -146,11 +146,14 @@ class LightingVanillaLSTM(pl.LightningModule):
         return loss
     
     
-def evaluate_vanilla_LSTM(model, dataloader):
+def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=2000):
     print("Using {torch.cuda.get_device_name(DEVICE)}")
 
-    trainer = pl.Trainer(max_epochs=2000)
-    trainer.fit(model, train_dataloaders=dataloader)
+    trainer = pl.Trainer(max_epochs=max_epochs)
+    trainer.fit(model, train_dataloaders=train, val_dataloaders=val)
+    result = trainer.evaluate(test_dataloaders=test)
+    print(result)
+    return
 
     # why lose time using keras or tensorflow ?
     # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
@@ -191,7 +194,7 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
 
     mapping = {k: v for v, k in enumerate(final_df.descrizionefarmaco.unique())}
     final_df['descrizionefarmaco'] = final_df['descrizionefarmaco'].map(mapping)
-    return final_df
+
     mapping = {k: v for v, k in enumerate(final_df.tipo.unique())}
     final_df['tipo'] = final_df['tipo'].map(mapping)
 
