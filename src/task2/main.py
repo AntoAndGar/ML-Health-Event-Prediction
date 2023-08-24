@@ -172,7 +172,8 @@ last_event_patient_label_1 = df_anagrafica_label_1.join(
 
 def dropLastSixMonths(df: pd.DataFrame) -> pd.DataFrame:
     df_last_event_label_1 = df.merge(
-        last_event_patient_label_1,
+        last_event_patient_label_1
+        ,
         on=["idana", "idcentro"],
         how="left",
         suffixes=("_left", "_right"),
@@ -183,7 +184,16 @@ def dropLastSixMonths(df: pd.DataFrame) -> pd.DataFrame:
     )
     df = (
         df_last_event_label_1[temp]
-        .drop(columns=["data_right"])
+        .drop(columns=["data_right",
+                        "sesso",
+                        "annodiagnosidiabete",
+                        "label",
+                        "scolarita",
+                        "statocivile",
+                        "professione",
+                        "annonascita",
+                        "annoprimoaccesso",
+                        "annodecesso"])
         .rename(columns={"data_left": "data"})
     )
     return df
@@ -347,47 +357,88 @@ elif balancing == "standard":
     print("Before balance: ", len(df_esami_stru))
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
-#NOTE: Gli id assumo valori anomali es(-8792111, 500)
 
-#TODO: Converti i codici da stringhe in codice
+
+#####################
+# LSTM
+#####################
+    
+val = 0.1
+test = 0.3
+train = 1 - val - test
+
+#TODO: Converti datatime in float
+
+#TODO: Split in train, test (and validation?)
+
+
 print("\n\n\t\tSTART WORKING WITH LSTM \n\n")
-print(df_anagrafica.label.value_counts)
-print(df_anagrafica.label.unique())  
-print("-----")
+
 vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab) 
-input(vanilla_df.head(30))
+print("dataset, created")
 vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len(vanilla_df.columns)-3, hidden_size=1)
-grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True).apply(lambda x: x)
-print("GROUPBY")
-input(grouped_vanilla.head(30))
+print("model created")
+#grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True).apply(lambda x: x)
+grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
+print("grouped")
 inputs = []
 labels = []
+dict = []
+dict2 = {}
+dict3 = {}
+firstTime = True
 for name, group in grouped_vanilla:
-    print(name)
-    print(group )
-    input("ok")
     vanilla_patient_hystory = group.sort_values(by=["data"])
-    print(group["label"].values)
     labels.append(torch.tensor(group["label"].values))
-    vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
-#    #vanilla_model().detatch()
-    inputs.append(torch.tensor(group.values))
-    #vanilla_model.forward(torch.tensor(group.values))
-    #vanilla_model.forward(tuple_dataset)
+    if vanilla_patient_hystory.values.shape[0] == 1:
+        #print(vanilla_patient_hystory)
+        dict3[vanilla_patient_hystory["extra"].values[0]] = 1
+        if vanilla_patient_hystory["idana"].values[0] > 0:
+            daje = True
+            print(vanilla_patient_hystory.values)
+            if firstTime:
+                print("Fist time")
+                #print(vanilla_patient_hystory.values)
+                print(vanilla_patient_hystory.values.shape)
+                print(vanilla_patient_hystory.values.shape[0])
+                firstTime = False
+            print("DJ")
+    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["data","annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
+    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
+    inputs.append(vanilla_patient_hystory.values)
+    dict2[vanilla_patient_hystory.values.shape[0]] = dict2[vanilla_patient_hystory.values.shape[0]] + 1 if vanilla_patient_hystory.values.shape[0] in dict2 else 1
 
+
+    dict.append(vanilla_patient_hystory.values.shape[0])
+    dict.append(vanilla_patient_hystory.values.shape[1])
+print("DDDJJJ")
+print(dict3)
+print("Shapes")
+print("Shapes")
+print(dict[0])
+print(dict[-1])
+
+try:
+    print("I valori")
+    vero_dict2 = list(dict.keys(dict2))
+    print(vero_dict2)
+except:
+    print("I valori non stampabili")
+print(dict2)
+#print(dict2)  
+input("inputs: ", inputs)
 inputs = torch.tensor(inputs)
 labels = torch.tensor(labels)
 vanilla_dataset = Vanilla_LSTM.TensorDataset(inputs, labels)
-print(vanilla_dataset)
-print(len(vanilla_dataset))
-input("PREMI ENTER")
 dataloader = Vanilla_LSTM.DataLoader(vanilla_dataset, batch_size=16, shuffle=True)
 
 Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, dataloader)
 
-
-
 exit()
+
+#####################
+# PubMedBERT
+#####################
 tuple_dataset = []
 load_dataset = False
 if load_dataset:
@@ -395,10 +446,6 @@ if load_dataset:
     atc = pd.read_csv("atc_info_nodup.csv")
     # Converting Dataset for Deep Learning purposes
 
-    # NOTE: Utilizzare sempre gli stessi nomi dal primo all'ultimo task non è più semplice?
-    #       Sia per noi nello scrivere il codice che per chi lo legge
-    # Non per BERT che deve leggere i nomi italiani delle colonne e il contenuto in inglese
-    # e lui è addestrato su dataset in inglese quindi non ha senso che gli diamo i nomi in italiano
     df_anagrafica = (
         df_anagrafica[
             [
@@ -741,105 +788,6 @@ if not (load_dataset):
     print("loaded dataset")
     print("dataset: ", len(tuple_dataset))
     # print(tuple_dataset[:1])
-
-
-#####################
-# LSTM
-#####################
-
-
-def evaluate_vanilla_LSTM():
-    print("Using {torch.cuda.get_device_name(DEVICE)}")
-
-    # why lose time using keras or tensorflow ?
-    # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
-    return
-
-    from keras.models import Sequential
-    from keras.layers import LSTM, Dense
-    from keras.optimizers import Adam
-    from keras.losses import BinaryCrossentropy
-    from keras.metrics import BinaryAccuracy
-
-    # At first, we merge with the patient data
-    features_lstm = pd.merge(df_diagnosi, df_anagrafica, on=["idcenter", "idpatient"])
-
-    # We create a single ID column that combines the other three:
-    features_lstm["id"] = features_lstm.apply(
-        lambda x: f"{x['idcenter']}_{x['idpatient']}", axis=1
-    )
-
-    # We reorder the columns
-    features_lstm = features_lstm[
-        ["id"] + [x for x in features_lstm.columns if x != "id"]
-    ]
-
-    # We drop the other ID_columns
-    features_lstm.drop(columns=["idcenter", "idpatient"], inplace=True)
-
-    # We categorize the columns that contain text
-    categorical_columns = ["amdcode", "value", "sex"]
-    for col in categorical_columns:
-        features_lstm[col] = features_lstm[col].astype("category")
-        features_lstm[col] = features_lstm[col].cat.codes
-
-    # We convert every columns into float type
-    numerical_columns = [
-        col for col in features_lstm.columns if col not in ["id", "date"]
-    ]
-    for col in numerical_columns:
-        features_lstm[col] = features_lstm[col].astype("float")
-
-    features_lstm.head(10)
-
-    X_columns = [col for col in df.columns if col not in ["id", "label", "date"]]
-    y_columns = ["label"]
-
-    Vanilla_LSTM = Sequential()
-    Vanilla_LSTM
-    Vanilla_LSTM.add(
-        LSTM(
-            100,
-            activation="tanh",
-            return_sequences=True,
-            input_shape=(1, len(X_columns)),
-        )
-    )
-    Vanilla_LSTM.add(LSTM(49, activation="tanh"))
-    Vanilla_LSTM.add(Dense(1, activation="sigmoid"))
-    Vanilla_LSTM.compile(
-        optimizer=Adam(learning_rate=1e-3),
-        loss=BinaryCrossentropy(),
-        metrics=[BinaryAccuracy()],
-    )
-
-    grouped_events = features_lstm.groupby(["id"])
-
-    for it, (ids, features) in enumerate(grouped_events):
-        batch = features[features["id"] == ids].sort_values(["date"])
-        X = batch[X_columns]
-        X = np.resize(X, (X.shape[0], 1, X.shape[1]))
-        y = batch[y_columns]
-        if it % 200 == 0:
-            print(f"Patient {it}/{len(df_anagrafica)}")
-        Vanilla_LSTM.fit(
-            X, y, batch_size=len(X), epochs=10, verbose=1 if it % 200 == 0 else 0
-        )
-
-    # We take a single batch to evaluate the model
-    rand_index = random.randint(0, len(df_anagrafica))
-    rand_id = tuple(df_anagrafica.iloc[rand_index, :3])
-    rand_id = f"{rand_id[0]}_{rand_id[1]}_{rand_id[2]}"
-    rand_batch = features_lstm[features_lstm["id"] == rand_id]
-    print(rand_batch)
-
-    X = rand_batch[X_columns]
-    X = np.resize(X, (X.shape[0], 1, X.shape[1]))
-    Vanilla_LSTM.evaluate(x=X, y=rand_batch[y_columns])
-
-
-def evaluate_T_LSTM():
-    return
 
 
 def convert_to_huggingfaceDataset(tuple_dataset):
