@@ -457,7 +457,6 @@ van_train = 1 - van_val - van_test
 
 #TODO: Split in train, test (and validation?)
 
-
 print("\nSTART WORKING WITH LSTM\n")
 
 
@@ -472,9 +471,11 @@ if not LOAD_VANILLA_DF:
 else:
     print("loading vanilla data")
     vanilla_df= read_csv("appo/vanilla_df.csv")
+    vanilla_df = vanilla_df.fillna(-100)
 
-len(vanilla_df.columns)
-vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len(vanilla_df.columns)-8  , hidden_size=1)
+len_input = len(vanilla_df.columns)-4 #13
+print("len_input: ", len_input)
+vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=1)
 grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
 inputs = []
 labels = []
@@ -499,16 +500,27 @@ print("Max history len: ", max_history_len)
 #TODO: Tieni max gli ultimi 1200 eventi 
 from torch.nn.utils.rnn import pad_sequence
 
-tensor_list = [torch.cat((torch.zeros(max_history_len - len(sublist),13), torch.tensor(sublist))) for sublist in inputs]
+tensor_list = [
+    torch.cat((torch.zeros(
+        max_history_len - len(sublist),len_input),
+        torch.tensor(sublist)))
+    for sublist in inputs
+    ]
 padded_tensor = pad_sequence(tensor_list, batch_first=True)
-
-bool_tensor = torch.tensor(labels, dtype=torch.bool)
-unsqueeze_labels = bool_tensor.unsqueeze(1).repeat(1, max_history_len)
-
+padded_tensor = padded_tensor.to(torch.float32)
+print("padded_tensor: ", padded_tensor.shape)
+print(padded_tensor[0])
+bool_tensor = torch.tensor(labels, dtype=torch.float32)
+#unsqueeze_labels = bool_tensor.unsqueeze(1).repeat(1, max_history_len)
+unsqueeze_labels = bool_tensor
+print("unsqueeze_labels: ", unsqueeze_labels.shape)
+print(unsqueeze_labels)
 
 # Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
 vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, unsqueeze_labels)
-
+print(vanilla_dataset[0])
+print(vanilla_dataset[0][0])
+print(vanilla_dataset[0][0].shape)
 # Define the sizes for train, validation, and test sets
 train_size = int(van_train * len(vanilla_dataset))
 val_size = int(van_val * len(vanilla_dataset))
@@ -523,7 +535,14 @@ batch_size = 16  # Adjust as needed
 train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-
+try:
+    print("train_loader: ", len(train_loader))
+except:
+    print("failed to print train_loader")
+try:
+    print("train_loader: ", train_loader.shape)
+except:
+    print("failed to print train_loader.shape")
 print("train_loader: ", len(train_loader))
 print("val_loader: ", len(val_loader))
 print("test_loader: ", len(test_loader))

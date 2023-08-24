@@ -113,16 +113,26 @@ class Vanilla_LSTM_Data_Module(pl.LightningModule):
 class LightingVanillaLSTM(pl.LightningModule):
     def __init__(self, input_size, hidden_size = 1):
         super().__init__()
+        self.input_size = input_size
+        self.loss = nn.CrossEntropyLoss()
         #input_size = number of features as input
         #hidden_size = number of features in hidden state, so the output size
-        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size)
-        #self.lstm = nn.LSTM(input_size=1, hidden_size=1, num_layers=1, batch_first=True)
-
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=2)
     def forward(self, input):
-        input_trans = input.view(len(input), 1)
-        lstm_out, temp = self.lstm(input_trans)
-
-        prediction = lstm_out[-1]
+        #print("Input shape: ", input.shape)
+        #print("Dypes: ", input.dtype)
+        #print("Input: ", input)
+        #input_trans = input.view(len(input), 1)
+        #TODO: tensore di Hidden state e tensore di LSTM
+        #h0 = torch.randn(2, 32) #TODO: fix the shape
+        #c0 = torch.randn(2, 32) #TODO: fix the shape
+        #tuple_tensor = (torch.tensor)
+        #lstm_out, (hn, cn) = self.lstm(input,(h0, c0))
+        lstm_out, (hn, cn) = self.lstm(input)
+        #print("LSTM out shape: ", lstm_out.shape)
+        #print("LSTM out: ", lstm_out)
+        #prediction = self.linear(lstm_out)
+        prediction = lstm_out.mean() #FIXME: fix the prediction
         return prediction
     
     def configure_optimizers(self) -> Any:
@@ -132,18 +142,26 @@ class LightingVanillaLSTM(pl.LightningModule):
         # Calculate loss and log training process
 
         input_i, label_i = batch
-        output_i = self.forward(input_i[0])
+        output_i = self.forward(input_i)
+        print(input_i.shape)
+        print(label_i.shape)
+        print(label_i)
+        print(output_i.shape)
+        print(output_i)
         #Loss is Sum of the squared residuals
-        loss = (output_i - label_i[0]) ** 2
 
-        self.log('train_loss', loss)    
+        temp_loss = self.loss(output_i.view(1), label_i.view(1))
 
+        #loss = (output_i - label_i[0]) ** 2
+
+        self.log('train_loss', temp_loss)    
+        '''
         if label_i == 0:
             self.log("out_0", output_i)
         elif label_i == 1:
             self.log("out_1", output_i)
-
-        return loss
+        '''
+        return temp_loss
     
     
 def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=2000):
@@ -184,25 +202,33 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     final_df['valore'] = final_df['valore'].replace('P', 1)
     final_df['valore'] = final_df['valore'].replace('S', 2)
     mapping = {k: v for v, k in enumerate(final_df.codiceamd.unique())}
+    mapping[np.nan] = -100
     final_df['codiceamd'] = final_df['codiceamd'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.codiceatc.unique())}
+    mapping[np.nan] = -100
     final_df['codiceatc'] = final_df['codiceatc'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.codicestitch.unique())}
+    mapping[np.nan] = -100
     final_df['codicestitch'] = final_df['codicestitch'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.descrizionefarmaco.unique())}
+    mapping[np.nan] = -100
     final_df['descrizionefarmaco'] = final_df['descrizionefarmaco'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.tipo.unique())}
+    mapping[np.nan] = -100
     final_df['tipo'] = final_df['tipo'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.extra.unique())}
+    mapping[np.nan] = -100
     final_df['extra'] = final_df['extra'].map(mapping)
 
     #print("Valore: \t", final_df['valore'].unique())   
     final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
+    final_df['valore'] = final_df['valore'].fillna(-100)
+
     aaa = final_df['valore'].unique()   
     for i in aaa:
         if type(i) == str:
