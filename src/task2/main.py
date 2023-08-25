@@ -508,25 +508,17 @@ tensor_list = [
     ]
 padded_tensor = pad_sequence(tensor_list, batch_first=True)
 padded_tensor = padded_tensor.to(torch.float32)
-print("padded_tensor: ", padded_tensor.shape)
-print(padded_tensor[0])
+
 bool_tensor = torch.tensor(labels, dtype=torch.float32)
-#unsqueeze_labels = bool_tensor.unsqueeze(1).repeat(1, max_history_len)
-unsqueeze_labels = bool_tensor
-print("unsqueeze_labels: ", unsqueeze_labels.shape)
-print(unsqueeze_labels)
 
 # Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
-vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, unsqueeze_labels)
-print(vanilla_dataset[0])
-print(vanilla_dataset[0][0])
-print(vanilla_dataset[0][0].shape)
+vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, bool_tensor)
+
 # Define the sizes for train, validation, and test sets
 train_size = int(van_train * len(vanilla_dataset))
 val_size = int(van_val * len(vanilla_dataset))
 test_size = len(vanilla_dataset) - train_size - val_size
 
-print([train_size, val_size, test_size])
 # Split the dataset into train, validation, and test sets
 vanilla_train_dataset, vanilla_val_dataset, vanilla_test_dataset = random_split(vanilla_dataset, [train_size, val_size, test_size])
 
@@ -535,20 +527,7 @@ batch_size = 16  # Adjust as needed
 train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
 test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-try:
-    print("train_loader: ", len(train_loader))
-except:
-    print("failed to print train_loader")
-try:
-    print("train_loader: ", train_loader.shape)
-except:
-    print("failed to print train_loader.shape")
-print("train_loader: ", len(train_loader))
-print("val_loader: ", len(val_loader))
-print("test_loader: ", len(test_loader))
-#print("Shape train_loader: ", train_loader.dataset.shape)
-#print("Shape val_loader: ", val_loader.dataset.shape)
-#print("Shape test_loader: ", test_loader.dataset.shape)
+
 vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
 vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
 vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
