@@ -39,11 +39,11 @@ class LightingVanillaLSTM(pl.LightningModule):
         #print("LSTM out shape: ", lstm_out.shape)
         #print("LSTM out: ", lstm_out)
         #prediction = self.linear(lstm_out)
-        prediction = lstm_out.mean() #FIXME: fix the prediction
+        prediction = lstm_out[-1] #FIXME: fix the prediction
         return prediction
     
     def configure_optimizers(self) -> Any:
-        return Adam(self.parameters(), lr=0.001)
+        return Adam(self.parameters(), lr=0.01)
 
     def training_step(self, batch, batch_idx):
         # Calculate loss and log training process
@@ -59,19 +59,41 @@ class LightingVanillaLSTM(pl.LightningModule):
         self.log('train_loss', temp_loss)    
         '''
         if label_i == 0:
-            self.log("out_0", output_i)
+            self.log("out_0", output_i) 
         elif label_i == 1:
             self.log("out_1", output_i)
         '''
         return temp_loss
         
-def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=20):
+def evaluate_vanilla_LSTM(model, train, test, max_epochs=10):
     print("Using {torch.cuda.get_device_name(DEVICE)}")
     trainer = pl.Trainer(max_epochs=max_epochs)
-    trainer.fit(model, train_dataloaders=train, val_dataloaders=val)
-    result = trainer.evaluate(test_dataloaders=test)
-    print(result)
-    return
+    trainer.fit(model, train_dataloaders=train) #, val_dataloaders=val)
+    #result = model.evaluate(test_dataloaders=test)
+    # Test the model
+    # In test phase, we don't need to compute gradients (for memory efficiency)
+    with torch.no_grad():
+        correct = 0
+        total = 0
+        min = 10
+        max = -10
+        for input_i, label_i in test:
+            output = model(input_i)
+            if output >= max:
+                max = output
+            if output <= min:
+                min = output
+            if output >= 0.5:
+                output = 1
+            else:
+                output = 0
+            if output == label_i:
+                correct += 1
+            total += 1
+        print("Max: ", max)
+        print("Min: ", min)
+        print('Accuracy of the network on the test data: {} %'.format(100 * correct / total))
+    return 
 
     # why lose time using keras or tensorflow ?
     # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
@@ -102,33 +124,26 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     final_df['valore'] = final_df['valore'].replace('P', 1)
     final_df['valore'] = final_df['valore'].replace('S', 2)
     mapping = {k: v for v, k in enumerate(final_df.codiceamd.unique())}
-    mapping[np.nan] = -100
     final_df['codiceamd'] = final_df['codiceamd'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.codiceatc.unique())}
-    mapping[np.nan] = -100
     final_df['codiceatc'] = final_df['codiceatc'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.codicestitch.unique())}
-    mapping[np.nan] = -100
     final_df['codicestitch'] = final_df['codicestitch'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.descrizionefarmaco.unique())}
-    mapping[np.nan] = -100
     final_df['descrizionefarmaco'] = final_df['descrizionefarmaco'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.tipo.unique())}
-    mapping[np.nan] = -100
     final_df['tipo'] = final_df['tipo'].map(mapping)
 
     mapping = {k: v for v, k in enumerate(final_df.extra.unique())}
-    mapping[np.nan] = -100
     final_df['extra'] = final_df['extra'].map(mapping)
 
     #print("Valore: \t", final_df['valore'].unique())   
     final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
-    final_df['valore'] = final_df['valore'].fillna(-100)
-
+    final_df = final_df.fillna(-100)
     aaa = final_df['valore'].unique()   
     for i in aaa:
         if type(i) == str:
@@ -136,18 +151,3 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     #print("Dtypes: \t", final_df.dtypes)
     return final_df
 
-def create_array():
-    return
-
-'''
-def create_dataset(df_anagrafica, list_of_df):
-    create_dataset(
-        df_anagrafica=df_anagrafica,
-        df_diagnosi=list_of_df[0],
-        df_esami_par=list_of_df[1],
-        df_esami_par_cal=list_of_df[2],
-        df_esami_stru=list_of_df[3],
-        df_pre_diab_farm=list_of_df[4],
-        df_pre_diab_no_farm=list_of_df[5],
-        df_pre_no_diab=list_of_df[6])
-'''

@@ -450,16 +450,10 @@ elif BALANCING == "standard":
 # LSTM
 #####################
 
-van_val = 0.1
+#van_val = 0.1
 van_test = 0.3
-van_train = 1 - van_val - van_test
+van_train = 1 - van_test #- van_val
 #TODO: Converti datatime in float
-
-#TODO: Split in train, test (and validation?)
-
-print("\nSTART WORKING WITH LSTM\n")
-
-
 
 if not LOAD_VANILLA_DF:
     vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
@@ -474,7 +468,6 @@ else:
     vanilla_df = vanilla_df.fillna(-100)
 
 len_input = len(vanilla_df.columns)-4 #13
-print("len_input: ", len_input)
 vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=1)
 grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
 inputs = []
@@ -493,10 +486,9 @@ for name, group in grouped_vanilla:
     if vanilla_patient_hystory.values.shape[0] > max_history_len:
         max_history_len = vanilla_patient_hystory.values.shape[0]
     count += 1
-    if count >= 100:
+    if count >= 99999999:
         break
 
-print("Max history len: ", max_history_len)
 #TODO: Tieni max gli ultimi 1200 eventi 
 from torch.nn.utils.rnn import pad_sequence
 
@@ -510,6 +502,8 @@ padded_tensor = pad_sequence(tensor_list, batch_first=True)
 padded_tensor = padded_tensor.to(torch.float32)
 
 bool_tensor = torch.tensor(labels, dtype=torch.float32)
+print("Valori unici in bool_tensor:")
+print(torch.unique(bool_tensor, return_counts=True))
 
 # Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
 vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, bool_tensor)
@@ -1089,8 +1083,6 @@ def evaluate_PubMedBERT():
 
     return
 
-
-evaluate_vanilla_LSTM()
 evaluate_PubMedBERT()
 
 ############################
