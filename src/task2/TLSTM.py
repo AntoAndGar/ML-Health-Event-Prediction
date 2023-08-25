@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader, TensorDataset
 import pandas as pd
+import numpy as np
 from pytorch_lightning import (
     LightningModule,
     Trainer,
@@ -47,6 +49,15 @@ def create_dataset(
     ]
     final_df = pd.concat(dfs, ignore_index=True)
 
+    # Drop unnecessary columns because the df is too big
+    df_anagrafica = df_anagrafica.drop(
+        columns=[
+            "annonascita",
+            "annoprimoaccesso",
+            "annodecesso",
+            "annodiagnosidiabete",
+        ]
+    )
     # Merge with df_anagrafica
     final_df = final_df.merge(df_anagrafica, on=["idana", "idcentro"], how="inner")
 
@@ -263,7 +274,9 @@ class TLSTM(torch.nn.Module):
 
     def get_states(self):
         batch_size = self.input.size(0)
+        print("batch_size: ", batch_size)
         scan_input_ = self.input.permute(2, 0, 1)
+        print("scan_input: ", scan_input_)
         scan_input = scan_input_.permute(2, 1, 0)
         scan_time = self.time.permute(1, 0)
         initial_hidden = torch.zeros(batch_size, self.hidden_dim, dtype=torch.float32)
@@ -305,17 +318,73 @@ class TLSTM(torch.nn.Module):
 class TLSTMDataModule(LightningDataModule):
     def __init__(
         self,
-        dataset,
+        input_df,
         train_batch_size: int = 16,
         eval_batch_size: int = 16,
         **kwargs,
     ):
         super().__init__()
+        self.input_df = input_df
         self.train_batch_size = train_batch_size
         self.eval_batch_size = eval_batch_size
 
     def setup(self, stage=None):
-        # dataset =
+        # Calculate the input length directly
+        len_input = (
+            len(self.input_df.columns) - 4
+        )  # Assuming the number of columns is constant
+
+        # Group by "idana" and "idcentro" and sort each group by "data"
+        grouped = self.input_df.groupby(["idana", "idcentro"], group_keys=True)
+
+        inputs = []
+        labels = []
+        max_history_len = 0
+
+        # Limit the number of iterations to a reasonable value
+        max_iterations = min(len(grouped), 9999999)
+        for count, (_, group) in enumerate(grouped):
+            patient_history = group.sort_values(by=["data"])
+            labels.append(
+                patient_history["label"].iloc[0]
+            )  # Use iloc to access the first item
+            patient_history = patient_history.drop(
+                columns=["idana", "idcentro", "label", "data"]
+            )
+            nested_list = patient_history.to_numpy(dtype=np.float32)
+            inputs.append(nested_list)
+
+            max_history_len = max(
+                max_history_len, nested_list.shape[0]
+            )  # Update max_history_len
+
+            if count + 1 >= max_iterations:
+                break
+
+        # Pad sequences using pad_sequence
+        tensor_list = [
+            torch.cat(
+                (
+                    torch.zeros(max_history_len - len(sublist), len_input),
+                    torch.tensor(sublist),
+                )
+            )
+            for sublist in inputs
+        ]
+        padded_tensor = pad_sequence(tensor_list, batch_first=True)
+        padded_tensor = padded_tensor.to(torch.float32)
+
+        bool_tensor = torch.tensor(labels, dtype=torch.float32)
+
+        # Printing unique values in bool_tensor
+        unique_values, value_counts = torch.unique(bool_tensor, return_counts=True)
+        print("Unique values in bool_tensor:")
+        print(unique_values)
+        print("Value counts:")
+        print(value_counts)
+
+        # Create a dataset
+        dataset = TensorDataset(padded_tensor, bool_tensor)
 
         # split dataset into train and validation sampling randomly
         # use 20% of training data for validation
@@ -364,7 +433,7 @@ class LitTLSTM(LightningModule):
         weight_decay: float = 0.0,
     ):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["tlstm"])
 
         self.model = tlstm
         self.metric = torch.nn.CrossEntropyLoss()
@@ -425,20 +494,3 @@ class LitTLSTM(LightningModule):
         # )
         # scheduler = {"scheduler": scheduler, "interval": "step", "frequency": 1}
         return [optimizer]  # , [scheduler]
-
-
-# tlstm = TLSTM(input_dim=128, output_dim=2, hidden_dim=256, fc_dim=2, train=1)
-# model = LitTLSTM(tlstm)
-# print(tlstm)
-# print(model)
-# # checkpoint_callback = ModelCheckpoint(monitor="val_f1", mode="max")
-
-# trainer = Trainer(
-#     max_epochs=1,
-#     accelerator="auto",
-#     devices="auto",
-#     #     benchmark=True,
-#     #    precision="16-mixed",
-#     #    callbacks=[checkpoint_callback],
-# )
-# trainer.fit(model=model)

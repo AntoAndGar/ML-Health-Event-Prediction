@@ -1081,7 +1081,7 @@ def evaluate_PubMedBERT():
 
 
 def evaluate_T_LSTM():
-    vanilla_df = TLSTM.create_dataset(
+    df = TLSTM.create_dataset(
         df_anagrafica,
         df_diagnosi,
         df_esami_lab_par,
@@ -1091,7 +1091,25 @@ def evaluate_T_LSTM():
         df_pres_diab_no_farm,
         df_pres_no_diab,
     )
-    print(vanilla_df.head())
+    dm = TLSTM.TLSTMDataModule(df)
+    # dm.setup("fit")
+    # print(next(iter(dm.train_dataloader())))
+
+    tlstm = TLSTM.TLSTM(input_dim=128, output_dim=2, hidden_dim=256, fc_dim=2, train=1)
+    model = TLSTM.LitTLSTM(tlstm)
+    # print(tlstm)
+    # print(model)
+    # checkpoint_callback = ModelCheckpoint(monitor="val_f1", mode="max")
+
+    trainer = Trainer(
+        max_epochs=1,
+        accelerator="auto",
+        devices="auto",
+        #     benchmark=True,
+        precision="16-mixed",
+        #    callbacks=[checkpoint_callback],
+    )
+    trainer.fit(model=model, datamodule=dm)
     return
 
 
