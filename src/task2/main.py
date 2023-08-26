@@ -450,9 +450,9 @@ elif BALANCING == "standard":
 # LSTM
 #####################
 
-#van_val = 0.1
+van_val = 0.1
 van_test = 0.3
-van_train = 1 - van_test #- van_val
+van_train = 1 - van_test - van_val
 #TODO: Converti datatime in float
 
 if not LOAD_VANILLA_DF:
@@ -468,7 +468,7 @@ else:
     vanilla_df = vanilla_df.fillna(-100)
 
 len_input = len(vanilla_df.columns)-4 #13
-vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=1)
+vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
 grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
 inputs = []
 labels = []
@@ -477,7 +477,7 @@ count = 0
 for name, group in grouped_vanilla:
     vanilla_patient_hystory = group.sort_values(by=["data"])
     labels.append(
-        group["label"].values[0]
+        vanilla_patient_hystory["label"].values[0]
         )
     vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
     nested_list = vanilla_patient_hystory.values
@@ -486,7 +486,8 @@ for name, group in grouped_vanilla:
     if vanilla_patient_hystory.values.shape[0] > max_history_len:
         max_history_len = vanilla_patient_hystory.values.shape[0]
     count += 1
-    if count >= 99999999:
+    continue
+    if count >= 50:
         break
 
 #TODO: Tieni max gli ultimi 1200 eventi 
@@ -494,13 +495,17 @@ from torch.nn.utils.rnn import pad_sequence
 
 tensor_list = [
     torch.cat((torch.zeros(
-        max_history_len - len(sublist),len_input),
+        max_history_len - len(sublist),len_input) - 200.0,
         torch.tensor(sublist)))
     for sublist in inputs
     ]
-padded_tensor = pad_sequence(tensor_list, batch_first=True)
+padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
+#padded_tensor = padded_tensor.to(torch.long)
 padded_tensor = padded_tensor.to(torch.float32)
-
+print(labels)
+print("[FAKE]Valori unici in bool_tensor:")
+bool_tensor = torch.tensor(labels, dtype=torch.bool)
+print(torch.unique(bool_tensor, return_counts=True))
 bool_tensor = torch.tensor(labels, dtype=torch.float32)
 print("Valori unici in bool_tensor:")
 print(torch.unique(bool_tensor, return_counts=True))
@@ -514,7 +519,7 @@ val_size = int(van_val * len(vanilla_dataset))
 test_size = len(vanilla_dataset) - train_size - val_size
 
 # Split the dataset into train, validation, and test sets
-vanilla_train_dataset, vanilla_val_dataset, vanilla_test_dataset = random_split(vanilla_dataset, [train_size, val_size, test_size])
+vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
 
 # Create DataLoader instances for train, validation, and test sets
 batch_size = 16  # Adjust as needed
@@ -525,7 +530,7 @@ test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=Tr
 vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
 vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
 vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, val=vanilla_val_dataset, test=vanilla_test_dataset)
+Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset)
 exit()
 
 #####################
