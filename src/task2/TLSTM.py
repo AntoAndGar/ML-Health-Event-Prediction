@@ -59,10 +59,13 @@ def create_dataset(
         ]
     )
     # Merge with df_anagrafica
-    final_df = final_df.merge(df_anagrafica, on=["idana", "idcentro"], how="inner")
+    final_df = final_df.merge(
+        df_anagrafica, on=["idana", "idcentro"], how="inner"
+    ).sort_values(by=["data"])
 
-    # Sort by date (inplace)
-    final_df.sort_values(by=["data"], inplace=True)
+    grouped = final_df.groupby(["idana", "idcentro"])
+    final_df["delta_events"] = grouped["data"].diff().dt.days.fillna(0)
+    final_df["delta_events"] = 1 / np.log(np.e + final_df["delta_events"])
 
     # Mapping for 'sesso' column (use astype to save memory)
     final_df["sesso"] = (
@@ -330,9 +333,7 @@ class TLSTMDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         # Calculate the input length directly
-        len_input = (
-            len(self.input_df.columns) - 4
-        )  # Assuming the number of columns is constant
+        len_input = len(self.input_df.columns) - 4
 
         # Group by "idana" and "idcentro" and sort each group by "data"
         grouped = self.input_df.groupby(["idana", "idcentro"], group_keys=True)
@@ -341,9 +342,7 @@ class TLSTMDataModule(LightningDataModule):
         labels = []
         max_history_len = 0
 
-        # Limit the number of iterations to a reasonable value
-        max_iterations = min(len(grouped), 9999999)
-        for count, (_, group) in enumerate(grouped):
+        for _, group in grouped:
             patient_history = group.sort_values(by=["data"])
             labels.append(
                 patient_history["label"].iloc[0]
@@ -357,9 +356,6 @@ class TLSTMDataModule(LightningDataModule):
             max_history_len = max(
                 max_history_len, nested_list.shape[0]
             )  # Update max_history_len
-
-            if count + 1 >= max_iterations:
-                break
 
         # Pad sequences using pad_sequence
         tensor_list = [

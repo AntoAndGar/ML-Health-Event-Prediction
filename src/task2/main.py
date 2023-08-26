@@ -1091,11 +1091,14 @@ def evaluate_T_LSTM():
         df_pres_diab_no_farm,
         df_pres_no_diab,
     )
+    print(df.head(2))
     dm = TLSTM.TLSTMDataModule(df)
     # dm.setup("fit")
     # print(next(iter(dm.train_dataloader())))
 
-    tlstm = TLSTM.TLSTM(input_dim=128, output_dim=2, hidden_dim=256, fc_dim=2, train=1)
+    tlstm = TLSTM.TLSTM(
+        input_dim=dm.train_batch_size, output_dim=2, hidden_dim=128, fc_dim=64, train=1
+    )
     model = TLSTM.LitTLSTM(tlstm)
     # print(tlstm)
     # print(model)
