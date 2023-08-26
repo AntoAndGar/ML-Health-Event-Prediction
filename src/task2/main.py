@@ -8,6 +8,12 @@ import os
 import re
 import torch
 
+import Vanilla_LSTM
+
+from datetime import datetime
+from typing import Optional
+
+
 from pytorch_lightning import (
     LightningDataModule,
     LightningModule,
@@ -17,7 +23,8 @@ from pytorch_lightning import (
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
+
 
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
@@ -48,6 +55,10 @@ CREATE_BERT_DATASET = False
 PARALLEL_LOAD_DATASET = True
 WRITE_DATASET = False
 DATASET_NAME = "dataset_def.pkl"
+
+# VANILLA LSTM PARAMETERS
+LOAD_VANILLA_DF: bool = True
+SAVE_VANILLA_DF: bool = True
 
 BALANCING = "standard"
 
@@ -84,6 +95,7 @@ AMD_OF_CARDIOVASCULAR_EVENT = [
     "AMD208",
     "AMD303",
 ]
+
 
 
 def read_csv(filename):
@@ -149,7 +161,11 @@ del file_names, df_list
 ############### STEP 1 ################
 #######################################
 
-print("########## STEP 1 ##########")
+print(df_anagrafica.label.value_counts())
+if df_anagrafica.label.unique().size > 2:
+    #print("Error: more than 2 different labels")
+    raise("Error: more than 2 different labels")
+
 
 df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == False]
 df_anagrafica_label_1 = df_anagrafica[df_anagrafica.label == True]
@@ -206,11 +222,26 @@ def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     temp = df_label_0_last_event["data_left"] >= (
-        df_label_0_last_event["data_right"] - pd.Timedelta(days=186)
+        df_label_0_last_event["data_right"] - np.timedelta64(6, "M")
     )
 
+    '''
+    df = (
+        df_label_0_last_event[temp]
+        .drop(columns=["data_right",
+                        "sesso",
+                        "annodiagnosidiabete",
+                        "label",
+                        "scolarita",
+                        "statocivile",
+                        "professione",
+                        "annonascita",
+                        "annoprimoaccesso",
+                        "annodecesso"])
+        .rename(columns={"data_left": "data"})
+    )
+    '''
     df = df.drop(temp[temp].index)
-
     return df
 
 
@@ -404,6 +435,7 @@ elif BALANCING == "standard":
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
 
+
     if PRESCRIZIONI:
         print("Before balance: ", len(df_pres_diab_farm))
         df_pres_diab_farm = balance(df_pres_diab_farm, 0.50)
@@ -416,6 +448,101 @@ elif BALANCING == "standard":
         print("Before balance: ", len(df_pres_no_diab))
         df_pres_no_diab = balance(df_pres_no_diab, 0.50)
         print("After balance: ", len(df_pres_no_diab))
+
+van_val = 0.1
+van_test = 0.3
+van_train = 1 - van_test - van_val
+#TODO: Converti datatime in float
+
+if not LOAD_VANILLA_DF:
+    vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+    vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
+
+    if SAVE_VANILLA_DF:
+        vanilla_df.to_csv(f"appo/vanilla_df.csv", index=False)
+        print(f"vanilla_df.csv exported")
+else:
+    print("loading vanilla data")
+    vanilla_df= read_csv("appo/vanilla_df.csv")
+    vanilla_df = vanilla_df.fillna(-100)
+
+len_input = len(vanilla_df.columns)-4 #13
+vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
+grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
+inputs = []
+labels = []
+max_history_len = 0
+count = 0
+
+for name, group in grouped_vanilla:
+    if group.values.shape[0] > max_history_len:
+        max_history_len = group.values.shape[0]
+
+k = 2
+while k*2 < max_history_len:
+    k = k*2
+altrocount = 0
+print("k max history len: ", k)
+for name, group in grouped_vanilla:
+    vanilla_patient_hystory = group.sort_values(by=["data"])
+    labels.append(
+        vanilla_patient_hystory["label"].values[0]
+        )
+    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
+
+    if vanilla_patient_hystory.values.shape[0] > k:
+        altrocount += 1
+        inputs.append(vanilla_patient_hystory.values[k:])
+    else:
+        inputs.append(vanilla_patient_hystory.values)
+    continue
+    count += 1
+    if count >= 50:
+        break
+print("altrocount: ", altrocount)
+from torch.nn.utils.rnn import pad_sequence
+
+tensor_list = [
+    torch.cat((torch.zeros(
+        max_history_len - len(sublist),len_input) - 200.0,
+        torch.tensor(sublist)))
+    for sublist in inputs
+    ]
+padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
+#padded_tensor = padded_tensor.to(torch.long)
+padded_tensor = padded_tensor.to(torch.float32)
+bool_tensor = torch.tensor(labels, dtype=torch.bool)
+bool_tensor = torch.tensor(labels, dtype=torch.float32)
+print("Valori unici in bool_tensor:")
+print(torch.unique(bool_tensor, return_counts=True))
+
+# Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
+vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, bool_tensor)
+
+# Define the sizes for train, validation, and test sets
+train_size = int(van_train * len(vanilla_dataset))
+val_size = int(van_val * len(vanilla_dataset))
+test_size = len(vanilla_dataset) - train_size - val_size
+
+# Split the dataset into train, validation, and test sets
+vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
+
+# Create DataLoader instances for train, validation, and test sets
+batch_size = 16  # Adjust as needed
+train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+
+vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset)
+exit()
+
+#####################
+# PubMedBERT
+#####################
+
 
 if BERT_DATASET:
     tuple_dataset = []
@@ -760,101 +887,6 @@ if BERT_DATASET:
         # print(tuple_dataset[:1])
 
 
-#####################
-# LSTM
-#####################
-
-
-def evaluate_vanilla_LSTM():
-    print("Using {torch.cuda.get_device_name(DEVICE)}")
-
-    # why lose time using keras or tensorflow ?
-    # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
-    return
-
-    from keras.models import Sequential
-    from keras.layers import LSTM, Dense
-    from keras.optimizers import Adam
-    from keras.losses import BinaryCrossentropy
-    from keras.metrics import BinaryAccuracy
-
-    # At first, we merge with the patient data
-    features_lstm = pd.merge(df_diagnosi, df_anagrafica, on=["idcenter", "idpatient"])
-
-    # We create a single ID column that combines the other three:
-    features_lstm["id"] = features_lstm.apply(
-        lambda x: f"{x['idcenter']}_{x['idpatient']}", axis=1
-    )
-
-    # We reorder the columns
-    features_lstm = features_lstm[
-        ["id"] + [x for x in features_lstm.columns if x != "id"]
-    ]
-
-    # We drop the other ID_columns
-    features_lstm.drop(columns=["idcenter", "idpatient"], inplace=True)
-
-    # We categorize the columns that contain text
-    categorical_columns = ["amdcode", "value", "sex"]
-    for col in categorical_columns:
-        features_lstm[col] = features_lstm[col].astype("category")
-        features_lstm[col] = features_lstm[col].cat.codes
-
-    # We convert every columns into float type
-    numerical_columns = [
-        col for col in features_lstm.columns if col not in ["id", "date"]
-    ]
-    for col in numerical_columns:
-        features_lstm[col] = features_lstm[col].astype("float")
-
-    features_lstm.head(10)
-
-    X_columns = [col for col in df.columns if col not in ["id", "label", "date"]]
-    y_columns = ["label"]
-
-    Vanilla_LSTM = Sequential()
-    Vanilla_LSTM
-    Vanilla_LSTM.add(
-        LSTM(
-            100,
-            activation="tanh",
-            return_sequences=True,
-            input_shape=(1, len(X_columns)),
-        )
-    )
-    Vanilla_LSTM.add(LSTM(49, activation="tanh"))
-    Vanilla_LSTM.add(Dense(1, activation="sigmoid"))
-    Vanilla_LSTM.compile(
-        optimizer=Adam(learning_rate=1e-3),
-        loss=BinaryCrossentropy(),
-        metrics=[BinaryAccuracy()],
-    )
-
-    grouped_events = features_lstm.groupby(["id"])
-
-    for it, (ids, features) in enumerate(grouped_events):
-        batch = features[features["id"] == ids].sort_values(["date"])
-        X = batch[X_columns]
-        X = np.resize(X, (X.shape[0], 1, X.shape[1]))
-        y = batch[y_columns]
-        if it % 200 == 0:
-            print(f"Patient {it}/{len(df_anagrafica)}")
-        Vanilla_LSTM.fit(
-            X, y, batch_size=len(X), epochs=10, verbose=1 if it % 200 == 0 else 0
-        )
-
-    # We take a single batch to evaluate the model
-    rand_index = random.randint(0, len(df_anagrafica))
-    rand_id = tuple(df_anagrafica.iloc[rand_index, :3])
-    rand_id = f"{rand_id[0]}_{rand_id[1]}_{rand_id[2]}"
-    rand_batch = features_lstm[features_lstm["id"] == rand_id]
-    print(rand_batch)
-
-    X = rand_batch[X_columns]
-    X = np.resize(X, (X.shape[0], 1, X.shape[1]))
-    Vanilla_LSTM.evaluate(x=X, y=rand_batch[y_columns])
-
-
 def convert_to_huggingfaceDataset(tuple_dataset):
     # here data is a list of tuples,
     # each containing the patient history string and their label
@@ -1078,7 +1110,6 @@ def evaluate_PubMedBERT():
     trainer.fit(model=model, datamodule=dm)
 
     return
-
 
 def evaluate_T_LSTM():
     df = TLSTM.create_dataset(

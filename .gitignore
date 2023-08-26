@@ -5,3 +5,4 @@ __pycache__
 test.ipynb
 dataset.pkl
 .vscode
+lightning_logs/

@@ -5,7 +5,7 @@ import pandas as pd
 
 WRITE_DATA_PATH = "clean_data"
 PRESCRIZIONI = True
-WRITE_CSV = False
+WRITE_CSV = True
 
 """
 AMD047: Myocardial infarction
@@ -837,6 +837,7 @@ df_anagrafica_attivi = df_anagrafica_attivi.rename(columns={"data": "last_proble
 df_anagrafica_attivi["label"] = (
     df_anagrafica_attivi["last_event"] - df_anagrafica_attivi["last_problem"]
 ) <= pd.Timedelta(days=186)
+
 
 print(df_anagrafica_attivi["label"].value_counts())
 
