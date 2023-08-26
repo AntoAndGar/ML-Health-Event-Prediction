@@ -474,23 +474,33 @@ inputs = []
 labels = []
 max_history_len = 0
 count = 0
+
+for name, group in grouped_vanilla:
+    if group.values.shape[0] > max_history_len:
+        max_history_len = group.values.shape[0]
+
+k = 2
+while k*2 < max_history_len:
+    k = k*2
+altrocount = 0
+print("k max history len: ", k)
 for name, group in grouped_vanilla:
     vanilla_patient_hystory = group.sort_values(by=["data"])
     labels.append(
         vanilla_patient_hystory["label"].values[0]
         )
     vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
-    nested_list = vanilla_patient_hystory.values
-    inputs.append(vanilla_patient_hystory.values)
 
-    if vanilla_patient_hystory.values.shape[0] > max_history_len:
-        max_history_len = vanilla_patient_hystory.values.shape[0]
-    count += 1
+    if vanilla_patient_hystory.values.shape[0] > k:
+        altrocount += 1
+        inputs.append(vanilla_patient_hystory.values[k:])
+    else:
+        inputs.append(vanilla_patient_hystory.values)
     continue
+    count += 1
     if count >= 50:
         break
-
-#TODO: Tieni max gli ultimi 1200 eventi 
+print("altrocount: ", altrocount)
 from torch.nn.utils.rnn import pad_sequence
 
 tensor_list = [
@@ -502,10 +512,7 @@ tensor_list = [
 padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
 #padded_tensor = padded_tensor.to(torch.long)
 padded_tensor = padded_tensor.to(torch.float32)
-print(labels)
-print("[FAKE]Valori unici in bool_tensor:")
 bool_tensor = torch.tensor(labels, dtype=torch.bool)
-print(torch.unique(bool_tensor, return_counts=True))
 bool_tensor = torch.tensor(labels, dtype=torch.float32)
 print("Valori unici in bool_tensor:")
 print(torch.unique(bool_tensor, return_counts=True))

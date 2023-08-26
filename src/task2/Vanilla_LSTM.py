@@ -70,7 +70,7 @@ class LightingVanillaLSTM(pl.LightningModule):
         self.log('val_loss', temp_loss, prog_bar=True)   
         return temp_loss
 
-def evaluate_vanilla_LSTM(model, train, test, max_epochs=100):
+def evaluate_vanilla_LSTM(model, train, test, max_epochs=5):
     print("Using {torch.cuda.get_device_name(DEVICE)}")
     trainer = pl.Trainer(max_epochs=max_epochs)
     trainer.fit(model, train_dataloaders=train) #, val_dataloaders=val)
