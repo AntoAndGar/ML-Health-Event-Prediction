@@ -36,6 +36,8 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
+import TLSTM
+
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 SEED = 0
@@ -48,7 +50,8 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
 PRESCRIZIONI = True
-CREATE_DATASET = False
+BERT_DATASET = False
+CREATE_BERT_DATASET = False
 PARALLEL_LOAD_DATASET = True
 WRITE_DATASET = False
 DATASET_NAME = "dataset_def.pkl"
@@ -446,10 +449,6 @@ elif BALANCING == "standard":
         df_pres_no_diab = balance(df_pres_no_diab, 0.50)
         print("After balance: ", len(df_pres_no_diab))
 
-#####################
-# LSTM
-#####################
-
 van_val = 0.1
 van_test = 0.3
 van_train = 1 - van_test - van_val
@@ -543,332 +542,349 @@ exit()
 #####################
 # PubMedBERT
 #####################
-tuple_dataset = []
 
-if CREATE_DATASET:
-    amd = pd.read_csv("amd_codes_for_bert.csv").rename({"codice": "codiceamd"}, axis=1)
-    atc = pd.read_csv("atc_info_nodup.csv")
-    # Converting Dataset for Deep Learning purposes
 
-    df_anagrafica = (
-        df_anagrafica[
+if BERT_DATASET:
+    tuple_dataset = []
+
+    if CREATE_BERT_DATASET:
+        amd = pd.read_csv("amd_codes_for_bert.csv").rename(
+            {"codice": "codiceamd"}, axis=1
+        )
+        atc = pd.read_csv("atc_info_nodup.csv")
+        # Converting Dataset for Deep Learning purposes
+
+        # NOTE: Utilizzare sempre gli stessi nomi dal primo all'ultimo task non è più semplice?
+        #       Sia per noi nello scrivere il codice che per chi lo legge
+        # Non per BERT che deve leggere i nomi italiani delle colonne e il contenuto in inglese
+        # e lui è addestrato su dataset in inglese quindi non ha senso che gli diamo i nomi in italiano
+        df_anagrafica = (
+            df_anagrafica[
+                [
+                    "idcentro",
+                    "idana",
+                    "sesso",
+                    "annodiagnosidiabete",
+                    "scolarita",
+                    "statocivile",
+                    "professione",
+                    "annonascita",
+                    "annoprimoaccesso",
+                    "annodecesso",
+                    "label",
+                ]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "sesso": "sex",
+                    "annodiagnosidiabete": "yeardiagnosisdiabetes",
+                    "scolarita": "levelofeducation",
+                    "statocivile": "maritalstatus",
+                    "professione": "profession",
+                    "annonascita": "yearofbirth",
+                    "annoprimoaccesso": "yearfirstaccess",
+                    "annodecesso": "yearofdeath",
+                    "label": "label",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        df_diagnosi = df_diagnosi.merge(amd, on="codiceamd", how="left")
+        # reindexing the columns so we have in the string codiceamd: x meaning: y valore: z
+        df_diagnosi = (
+            df_diagnosi[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceamd": "amdcode",
+                    "meaning": "meaning",
+                    "valore": "value",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        df_esami_lab_par = df_esami_lab_par.merge(amd, on="codiceamd", how="left")
+        df_esami_lab_par = (
+            df_esami_lab_par[
+                ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceamd": "amdcode",
+                    "meaning": "meaning",
+                    "valore": "value",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        df_esami_lab_par_cal = df_esami_lab_par_cal.merge(
+            amd, on="codiceamd", how="left"
+        )
+        df_esami_lab_par_cal = (
+            df_esami_lab_par_cal[
+                [
+                    "idcentro",
+                    "idana",
+                    "data",
+                    "codiceamd",
+                    "codicestitch",
+                    "meaning",
+                    "valore",
+                ]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceamd": "amdcode",
+                    "codicestitch": "stitchcode",
+                    "meaning": "meaning",
+                    "valore": "value",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        df_esami_stru = df_esami_stru.merge(amd, on="codiceamd", how="left")
+        df_esami_stru = (
+            df_esami_stru[
+                ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceamd": "amdcode",
+                    "meaning": "meaning",
+                    "valore": "value",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        # this is the only one that has the codiceatc column and no codice amd
+        df_pres_diab_farm = (
+            df_pres_diab_farm.merge(
+                atc[["codiceatc", "atc_nome"]], on="codiceatc", how="left"
+            )[
+                [
+                    "idcentro",
+                    "idana",
+                    "data",
+                    "codiceatc",
+                    "atc_nome",
+                    "quantita",
+                    "idpasto",
+                    "descrizionefarmaco",
+                ]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceatc": "atccode",
+                    "atc_nome": "meaning",
+                    "quantita": "quantity",
+                    "idpasto": "idmeal",
+                    "descrizionefarmaco": "drugdescription",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        df_pres_diab_no_farm = df_pres_diab_no_farm.merge(
+            amd, on="codiceamd", how="left"
+        )
+        df_pres_diab_no_farm = (
+            df_pres_diab_no_farm[
+                ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceamd": "amdcode",
+                    "meaning": "meaning",
+                    "valore": "value",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        df_pres_no_diab = df_pres_no_diab.merge(amd, on="codiceamd", how="left")
+        df_pres_no_diab = (
+            df_pres_no_diab[
+                ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
+            ]
+            .rename(
+                {
+                    "idcentro": "idcenter",
+                    "idana": "idpatient",
+                    "data": "date",
+                    "codiceamd": "amdcode",
+                    "meaning": "meaning",
+                    "valore": "value",
+                },
+                axis=1,
+            )
+            .fillna("[UNK]")
+        )
+
+        print("end rebuilding dataframes")
+
+        dict_list_of_df = {
+            "diagnosis": df_diagnosi,
+            "exam parameter": df_esami_lab_par,
+            "exam parameter calculated": df_esami_lab_par_cal,
+            "exam strumental": df_esami_stru,
+            "prescription diabete drugs": df_pres_diab_farm,
+            "prescription diabete not drugs": df_pres_diab_no_farm,
+            "prescription not diabete": df_pres_no_diab,
+        }
+
+        df_anagrafica_no_label = df_anagrafica[
             [
-                "idcentro",
-                "idana",
-                "sesso",
-                "annodiagnosidiabete",
-                "scolarita",
-                "statocivile",
-                "professione",
-                "annonascita",
-                "annoprimoaccesso",
-                "annodecesso",
-                "label",
+                "idcenter",
+                "idpatient",
+                "sex",
+                "yeardiagnosisdiabetes",
+                "levelofeducation",
+                "maritalstatus",
+                "profession",
+                "yearofbirth",
+                "yearfirstaccess",
+                "yearofdeath",
             ]
         ]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "sesso": "sex",
-                "annodiagnosidiabete": "yeardiagnosisdiabetes",
-                "scolarita": "levelofeducation",
-                "statocivile": "maritalstatus",
-                "professione": "profession",
-                "annonascita": "yearofbirth",
-                "annoprimoaccesso": "yearfirstaccess",
-                "annodecesso": "yearofdeath",
-                "label": "label",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
 
-    df_diagnosi = df_diagnosi.merge(amd, on="codiceamd", how="left")
-    # reindexing the columns so we have in the string codiceamd: x meaning: y valore: z
-    df_diagnosi = (
-        df_diagnosi[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceamd": "amdcode",
-                "meaning": "meaning",
-                "valore": "value",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
+        # import time
+        # start_time = time.time()
 
-    df_esami_lab_par = df_esami_lab_par.merge(amd, on="codiceamd", how="left")
-    df_esami_lab_par = (
-        df_esami_lab_par[
-            ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
-        ]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceamd": "amdcode",
-                "meaning": "meaning",
-                "valore": "value",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
-
-    df_esami_lab_par_cal = df_esami_lab_par_cal.merge(amd, on="codiceamd", how="left")
-    df_esami_lab_par_cal = (
-        df_esami_lab_par_cal[
-            [
-                "idcentro",
-                "idana",
-                "data",
-                "codiceamd",
-                "codicestitch",
-                "meaning",
-                "valore",
-            ]
-        ]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceamd": "amdcode",
-                "codicestitch": "stitchcode",
-                "meaning": "meaning",
-                "valore": "value",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
-
-    df_esami_stru = df_esami_stru.merge(amd, on="codiceamd", how="left")
-    df_esami_stru = (
-        df_esami_stru[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceamd": "amdcode",
-                "meaning": "meaning",
-                "valore": "value",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
-
-    # this is the only one that has the codiceatc column and no codice amd
-    df_pres_diab_farm = (
-        df_pres_diab_farm.merge(
-            atc[["codiceatc", "atc_nome"]], on="codiceatc", how="left"
-        )[
-            [
-                "idcentro",
-                "idana",
-                "data",
-                "codiceatc",
-                "atc_nome",
-                "quantita",
-                "idpasto",
-                "descrizionefarmaco",
-            ]
-        ]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceatc": "atccode",
-                "atc_nome": "meaning",
-                "quantita": "quantity",
-                "idpasto": "idmeal",
-                "descrizionefarmaco": "drugdescription",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
-
-    df_pres_diab_no_farm = df_pres_diab_no_farm.merge(amd, on="codiceamd", how="left")
-    df_pres_diab_no_farm = (
-        df_pres_diab_no_farm[
-            ["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]
-        ]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceamd": "amdcode",
-                "meaning": "meaning",
-                "valore": "value",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
-
-    df_pres_no_diab = df_pres_no_diab.merge(amd, on="codiceamd", how="left")
-    df_pres_no_diab = (
-        df_pres_no_diab[["idcentro", "idana", "data", "codiceamd", "meaning", "valore"]]
-        .rename(
-            {
-                "idcentro": "idcenter",
-                "idana": "idpatient",
-                "data": "date",
-                "codiceamd": "amdcode",
-                "meaning": "meaning",
-                "valore": "value",
-            },
-            axis=1,
-        )
-        .fillna("[UNK]")
-    )
-
-    print("end rebuilding dataframes")
-
-    dict_list_of_df = {
-        "diagnosis": df_diagnosi,
-        "exam parameter": df_esami_lab_par,
-        "exam parameter calculated": df_esami_lab_par_cal,
-        "exam strumental": df_esami_stru,
-        "prescription diabete drugs": df_pres_diab_farm,
-        "prescription diabete not drugs": df_pres_diab_no_farm,
-        "prescription not diabete": df_pres_no_diab,
-    }
-
-    df_anagrafica_no_label = df_anagrafica[
-        [
-            "idcenter",
-            "idpatient",
-            "sex",
-            "yeardiagnosisdiabetes",
-            "levelofeducation",
-            "maritalstatus",
-            "profession",
-            "yearofbirth",
-            "yearfirstaccess",
-            "yearofdeath",
-        ]
-    ]
-
-    # import time
-    # start_time = time.time()
-
-    def create_history_string(patient):
-        df_anagrafica_filtered = df_anagrafica_no_label.loc[
-            (df_anagrafica_no_label["idcenter"] == patient[0])
-            & (df_anagrafica_no_label["idpatient"] == patient[1])
-        ]
-
-        history = "".join(
-            [
-                re.sub(
-                    r"\s*idpatient\s*-*\d+,*|\s*00:00:00",
-                    "",
-                    f"{row}, ".replace("(", " ", 1)
-                    .replace("Timestamp(", "")
-                    .replace(")", "")
-                    .replace("'", "")
-                    .replace(",", "")
-                    .replace("=", " "),
-                )
-                for row in df_anagrafica_filtered.itertuples(
-                    index=False, name="patientregistry"
-                )
-            ]
-        )
-
-        temp = []
-        # Iterate over each DataFrame in the dictionary dict_list_of_df
-        for name, df in dict_list_of_df.items():
-            # Filter the rows based on patient's ID and sort by date
-            df_filtered = df.loc[
-                (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
-            ].sort_values(by="date", ascending=False)
-
-            # Extract relevant information
-            info = [
-                re.sub(
-                    r"\s*idpatient\s*-*\d+,*\s*|\s*idcenter\s*-*\d+,*\s*|\s*00:00:00|Pandas|Timestamp\(|\(|\)|'|,",
-                    "",
-                    f"{row},".replace("=", " "),
-                )
-                for row in df_filtered.itertuples(index=False)
+        def create_history_string(patient):
+            df_anagrafica_filtered = df_anagrafica_no_label.loc[
+                (df_anagrafica_no_label["idcenter"] == patient[0])
+                & (df_anagrafica_no_label["idpatient"] == patient[1])
             ]
 
-            # Add the formatted information to the temp list
-            temp.extend([f"{name}"] + info)
-
-        # Combine the elements in the temp list into a single string
-        history += " ".join(temp)
-        return history
-
-    if not (PARALLEL_LOAD_DATASET):
-        # sequential version
-        for i, patient in enumerate(
-            df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
-        ):
-            # print(i)
-            # Get patient history as a string from df_anagrafica and other DataFrames
-            history_of_patient = create_history_string(patient)
-
-            # Get label
-            label = int(
-                df_anagrafica.loc[
-                    (df_anagrafica["idcenter"] == patient[0])
-                    & (df_anagrafica["idpatient"] == patient[1])
-                ]["label"].item()
+            history = "".join(
+                [
+                    re.sub(
+                        r"\s*idpatient\s*-*\d+,*|\s*00:00:00",
+                        "",
+                        f"{row}, ".replace("(", " ", 1)
+                        .replace("Timestamp(", "")
+                        .replace(")", "")
+                        .replace("'", "")
+                        .replace(",", "")
+                        .replace("=", " "),
+                    )
+                    for row in df_anagrafica_filtered.itertuples(
+                        index=False, name="patientregistry"
+                    )
+                ]
             )
 
-            tuple_dataset.append((history_of_patient, label))
-    elif PARALLEL_LOAD_DATASET:
-        # parallel version
-        # Okay this code with a pc of 12 core is resonable fast, 1000 patient in 11 seconds
-        # so I estimate a total of 15 minutes for all the patient
-        def process_patient(patient):
-            history_of_patient = create_history_string(patient)
-            label = int(
-                df_anagrafica.loc[
-                    (df_anagrafica["idcenter"] == patient[0])
-                    & (df_anagrafica["idpatient"] == patient[1])
-                ]["label"].item()
-            )
-            return (history_of_patient, label)
+            temp = []
+            # Iterate over each DataFrame in the dictionary dict_list_of_df
+            for name, df in dict_list_of_df.items():
+                # Filter the rows based on patient's ID and sort by date
+                df_filtered = df.loc[
+                    (df["idcenter"] == patient[0]) & (df["idpatient"] == patient[1])
+                ].sort_values(by="date", ascending=False)
 
-        patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates().values
+                # Extract relevant information
+                info = [
+                    re.sub(
+                        r"\s*idpatient\s*-*\d+,*\s*|\s*idcenter\s*-*\d+,*\s*|\s*00:00:00|Pandas|Timestamp\(|\(|\)|'|,",
+                        "",
+                        f"{row},".replace("=", " "),
+                    )
+                    for row in df_filtered.itertuples(index=False)
+                ]
 
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-            tuple_dataset = pool.map(process_patient, patients)
+                # Add the formatted information to the temp list
+                temp.extend([f"{name}"] + info)
 
-    print("dataset: ", len(tuple_dataset))
-    # dataset now contains a list of tuples, each containing the patient history string and their label
-    print(tuple_dataset[:1])
+            # Combine the elements in the temp list into a single string
+            history += " ".join(temp)
+            return history
 
-    # end_time = time.time()
-    # execution_time = end_time - start_time
-    # print(f"Execution Time: {execution_time:.6f} seconds")
-    if WRITE_DATASET:
-        with open(DATASET_NAME, "wb") as f:
-            pickle.dump(tuple_dataset, f)
-        print("stored dataset")
-else:
-    with open(DATASET_NAME, "rb") as f:
-        tuple_dataset = pickle.load(f)
+        if not (PARALLEL_LOAD_DATASET):
+            # sequential version
+            for i, patient in enumerate(
+                df_anagrafica[["idcenter", "idpatient"]].drop_duplicates()[:500].values
+            ):
+                # print(i)
+                # Get patient history as a string from df_anagrafica and other DataFrames
+                history_of_patient = create_history_string(patient)
 
-    print("loaded dataset")
-    print("dataset: ", len(tuple_dataset))
-    # print(tuple_dataset[:1])
+                # Get label
+                label = int(
+                    df_anagrafica.loc[
+                        (df_anagrafica["idcenter"] == patient[0])
+                        & (df_anagrafica["idpatient"] == patient[1])
+                    ]["label"].item()
+                )
+
+                tuple_dataset.append((history_of_patient, label))
+        elif PARALLEL_LOAD_DATASET:
+            # parallel version
+            # Okay this code with a pc of 12 core is resonable fast, 1000 patient in 11 seconds
+            # so I estimate a total of 15 minutes for all the patient
+            def process_patient(patient):
+                history_of_patient = create_history_string(patient)
+                label = int(
+                    df_anagrafica.loc[
+                        (df_anagrafica["idcenter"] == patient[0])
+                        & (df_anagrafica["idpatient"] == patient[1])
+                    ]["label"].item()
+                )
+                return (history_of_patient, label)
+
+            patients = df_anagrafica[["idcenter", "idpatient"]].drop_duplicates().values
+
+            with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+                tuple_dataset = pool.map(process_patient, patients)
+
+        print("dataset: ", len(tuple_dataset))
+        # dataset now contains a list of tuples, each containing the patient history string and their label
+        print(tuple_dataset[:1])
+
+        # end_time = time.time()
+        # execution_time = end_time - start_time
+        # print(f"Execution Time: {execution_time:.6f} seconds")
+        if WRITE_DATASET:
+            with open(DATASET_NAME, "wb") as f:
+                pickle.dump(tuple_dataset, f)
+            print("stored dataset")
+    else:
+        with open(DATASET_NAME, "rb") as f:
+            tuple_dataset = pickle.load(f)
+
+        print("loaded dataset")
+        print("dataset: ", len(tuple_dataset))
+        # print(tuple_dataset[:1])
 
 
 def convert_to_huggingfaceDataset(tuple_dataset):
@@ -1095,7 +1111,45 @@ def evaluate_PubMedBERT():
 
     return
 
-evaluate_PubMedBERT()
+def evaluate_T_LSTM():
+    df = TLSTM.create_dataset(
+        df_anagrafica,
+        df_diagnosi,
+        df_esami_lab_par,
+        df_esami_lab_par_cal,
+        df_esami_stru,
+        df_pres_diab_farm,
+        df_pres_diab_no_farm,
+        df_pres_no_diab,
+    )
+    print(df.head(2))
+    dm = TLSTM.TLSTMDataModule(df)
+    # dm.setup("fit")
+    # print(next(iter(dm.train_dataloader())))
+
+    tlstm = TLSTM.TLSTM(
+        input_dim=dm.train_batch_size, output_dim=2, hidden_dim=128, fc_dim=64, train=1
+    )
+    model = TLSTM.LitTLSTM(tlstm)
+    # print(tlstm)
+    # print(model)
+    # checkpoint_callback = ModelCheckpoint(monitor="val_f1", mode="max")
+
+    trainer = Trainer(
+        max_epochs=1,
+        accelerator="auto",
+        devices="auto",
+        #     benchmark=True,
+        precision="16-mixed",
+        #    callbacks=[checkpoint_callback],
+    )
+    trainer.fit(model=model, datamodule=dm)
+    return
+
+
+evaluate_vanilla_LSTM()
+evaluate_T_LSTM()
+# evaluate_PubMedBERT()
 
 ############################
 ### Advanced Unbalancing ###
