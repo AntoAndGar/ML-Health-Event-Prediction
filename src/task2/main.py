@@ -57,8 +57,16 @@ WRITE_DATASET = False
 DATASET_NAME = "dataset_def.pkl"
 
 # VANILLA LSTM PARAMETERS
-LOAD_VANILLA_DF: bool = True
+VANILLA_LSTM: bool = False
+LOAD_VANILLA_DF: bool = False
 SAVE_VANILLA_DF: bool = True
+DROP_ANNI: bool = False
+
+# TIME LSTM PARAMETERS
+TIME_LSTM: bool = True
+LOAD_TIME_DF: bool = True
+SAVE_TIME_DF: bool = False
+
 
 BALANCING = "standard"
 
@@ -453,92 +461,91 @@ van_val = 0.1
 van_test = 0.3
 van_train = 1 - van_test - van_val
 #TODO: Converti datatime in float
+if VANILLA_LSTM:
+    if not LOAD_VANILLA_DF:
+        vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+        if DROP_ANNI:
+            vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
 
-if not LOAD_VANILLA_DF:
-    vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
-    vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
-
-    if SAVE_VANILLA_DF:
-        vanilla_df.to_csv(f"appo/vanilla_df.csv", index=False)
-        print(f"vanilla_df.csv exported")
-else:
-    print("loading vanilla data")
-    vanilla_df= read_csv("appo/vanilla_df.csv")
-    vanilla_df = vanilla_df.fillna(-100)
-
-len_input = len(vanilla_df.columns)-4 #13
-vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
-grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
-inputs = []
-labels = []
-max_history_len = 0
-count = 0
-
-for name, group in grouped_vanilla:
-    if group.values.shape[0] > max_history_len:
-        max_history_len = group.values.shape[0]
-
-k = 2
-while k*2 < max_history_len:
-    k = k*2
-altrocount = 0
-print("k max history len: ", k)
-for name, group in grouped_vanilla:
-    vanilla_patient_hystory = group.sort_values(by=["data"])
-    labels.append(
-        vanilla_patient_hystory["label"].values[0]
-        )
-    vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
-
-    if vanilla_patient_hystory.values.shape[0] > k:
-        altrocount += 1
-        inputs.append(vanilla_patient_hystory.values[k:])
+        if SAVE_VANILLA_DF:
+            vanilla_df.to_csv(f"appo/vanilla_df.csv", index=False)
+            print(f"vanilla_df.csv exported")
     else:
-        inputs.append(vanilla_patient_hystory.values)
-    continue
-    count += 1
-    if count >= 50:
-        break
-print("altrocount: ", altrocount)
-from torch.nn.utils.rnn import pad_sequence
+        print("loading vanilla data")
+        vanilla_df= read_csv("appo/vanilla_df.csv")
+        vanilla_df = vanilla_df.fillna(-100)
 
-tensor_list = [
-    torch.cat((torch.zeros(
-        max_history_len - len(sublist),len_input) - 200.0,
-        torch.tensor(sublist)))
-    for sublist in inputs
-    ]
-padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
-#padded_tensor = padded_tensor.to(torch.long)
-padded_tensor = padded_tensor.to(torch.float32)
-bool_tensor = torch.tensor(labels, dtype=torch.bool)
-bool_tensor = torch.tensor(labels, dtype=torch.float32)
-print("Valori unici in bool_tensor:")
-print(torch.unique(bool_tensor, return_counts=True))
+    len_input = len(vanilla_df.columns)-4 #13
+    vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
+    grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
+    inputs = []
+    labels = []
+    max_history_len = 0
+    count = 0
 
-# Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
-vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, bool_tensor)
+    for name, group in grouped_vanilla:
+        if group.values.shape[0] > max_history_len:
+            max_history_len = group.values.shape[0]
 
-# Define the sizes for train, validation, and test sets
-train_size = int(van_train * len(vanilla_dataset))
-val_size = int(van_val * len(vanilla_dataset))
-test_size = len(vanilla_dataset) - train_size - val_size
+    k = 2
+    while k*2 < max_history_len:
+        k = k*2
+    altrocount = 0
+    print("k max history len: ", k)
+    for name, group in grouped_vanilla:
+        vanilla_patient_hystory = group.sort_values(by=["data"])
+        labels.append(
+            vanilla_patient_hystory["label"].values[0]
+            )
+        vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
 
-# Split the dataset into train, validation, and test sets
-vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
+        if vanilla_patient_hystory.values.shape[0] > k:
+            altrocount += 1
+            inputs.append(vanilla_patient_hystory.values[k:])
+        else:
+            inputs.append(vanilla_patient_hystory.values)
+        continue
+        count += 1
+        if count >= 50:
+            break
+    print("altrocount: ", altrocount)
+    from torch.nn.utils.rnn import pad_sequence
 
-# Create DataLoader instances for train, validation, and test sets
-batch_size = 16  # Adjust as needed
-train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+    tensor_list = [
+        torch.cat((torch.zeros(
+            max_history_len - len(sublist),len_input) - 200.0,
+            torch.tensor(sublist)))
+        for sublist in inputs
+        ]
+    padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
+    #padded_tensor = padded_tensor.to(torch.long)
+    padded_tensor = padded_tensor.to(torch.float32)
+    bool_tensor = torch.tensor(labels, dtype=torch.bool)
+    bool_tensor = torch.tensor(labels, dtype=torch.float32)
+    print("Valori unici in bool_tensor:")
+    print(torch.unique(bool_tensor, return_counts=True))
 
-vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
-vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
-vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
-exit()
+    # Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
+    vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, bool_tensor)
 
+    # Define the sizes for train, validation, and test sets
+    train_size = int(van_train * len(vanilla_dataset))
+    val_size = int(van_val * len(vanilla_dataset))
+    test_size = len(vanilla_dataset) - train_size - val_size
+
+    # Split the dataset into train, validation, and test sets
+    vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
+
+    # Create DataLoader instances for train, validation, and test sets
+    batch_size = 16  # Adjust as needed
+    train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+
+    vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+    vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+    vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+    Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
 #####################
 # PubMedBERT
 #####################
@@ -1146,10 +1153,52 @@ def evaluate_T_LSTM():
     trainer.fit(model=model, datamodule=dm)
     return
 
-
-evaluate_vanilla_LSTM()
 evaluate_T_LSTM()
 # evaluate_PubMedBERT()
+
+if TIME_LSTM:
+    if LOAD_TIME_DF:
+        vanilla_df = read_csv("appo/time_df.csv")
+        vanilla_df = vanilla_df.fillna(-100)
+    else:
+        vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+        if SAVE_TIME_DF:
+            vanilla_df.to_csv(f"appo/time_df.csv", index=False)
+            print(f"time_df.csv exported")
+
+    vanilla_df['data']=vanilla_df['data'].astype(str).replace({'-':''}, regex=True)
+
+
+
+
+
+'''
+# At first, we merge with the patient data
+features_Tlstm = pd.merge(df_diagnosi, df_anagrafica, on=['idcentro','idana','idcopy'])
+
+# We create a single ID column that combines the other three:
+features_Tlstm['id'] = features_Tlstm.apply(lambda x: f"{x['idcentro']}_{x['idana']}_{x['idcopy']}",axis=1)
+
+# We reorder the columns
+features_Tlstm = features_Tlstm[['id']+[x for x in features_Tlstm.columns if x!='id']]
+
+# We drop the other ID_columns
+features_Tlstm.drop(columns=['idcentro','idana','idcopy'], inplace=True)
+
+# We categorize the columns that contain text
+categorical_columns = ['codiceamd', 'valore', 'sesso']
+for col in categorical_columns:
+    features_Tlstm[col] = features_Tlstm[col].astype('category')
+    features_Tlstm[col] = features_Tlstm[col].cat.codes
+
+# We convert every columns into float type
+numerical_columns = [col for col in features_Tlstm.columns if col not in ['id','data']]
+for col in numerical_columns:
+    features_Tlstm[col] = features_Tlstm[col].astype('float')
+features_Tlstm['data']=features_Tlstm['data'].replace({'-':''}, regex=True)
+features_Tlstm.head(10)
+'''
+
 
 ############################
 ### Advanced Unbalancing ###

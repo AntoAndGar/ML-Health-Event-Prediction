@@ -22,14 +22,10 @@ class LightingVanillaLSTM(pl.LightningModule):
         super().__init__()
         self.input_size = input_size
         self.loss = nn.MSELoss()
-        self.linear = nn.Linear(hidden_size, 1)
-        #input_size = number of features as input
+        #self.linear = nn.Linear(hidden_size, 1)
+
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=2)
     def forward(self, input):
-        #h0 = torch.randn(2, 32) #TODO: fix the shape
-        #c0 = torch.randn(2, 32) #TODO: fix the shape
-        #tuple_tensor = (torch.tensor)
-        #lstm_out, (hn, cn) = self.lstm(input,(h0, c0))
         #print(input.shape)dis
         #print(input.shape)
         #if len(input.shape) == 2:
@@ -50,7 +46,7 @@ class LightingVanillaLSTM(pl.LightningModule):
         #prediction = lstm_out.mean()
         return lstm_out.mean()
         return prediction
-    torch.Size([2413, 13])
+
     def configure_optimizers(self) -> Any:
         return Adam(self.parameters(), lr=0.0001)
 
@@ -182,11 +178,15 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
 
     #print("Valore: \t", final_df['valore'].unique())   
     final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
+
+    # Convert datatime of year to float or int [it's the same]
+    final_df['annodecesso'] = final_df['annodecesso'].dt.year
+    final_df['annodiagnosidiabete'] = final_df['annodiagnosidiabete'].dt.year
+    final_df['annoprimoaccesso'] = final_df['annoprimoaccesso'].dt.year
+    final_df['annonascita'] = final_df['annonascita'].dt.year  
+
     final_df = final_df.fillna(-100)
-    aaa = final_df['valore'].unique()   
-    for i in aaa:
-        if type(i) == str:
-            raise("Value not converted to numeric. Impossible to convert to numeric, and use this data for LSTM")
-    #print("Dtypes: \t", final_df.dtypes)
+    print("Dtypes: \t", final_df.dtypes)
+
     return final_df
 
