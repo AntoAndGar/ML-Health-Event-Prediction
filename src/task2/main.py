@@ -536,7 +536,7 @@ test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=Tr
 vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
 vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
 vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset)
+Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
 exit()
 
 #####################

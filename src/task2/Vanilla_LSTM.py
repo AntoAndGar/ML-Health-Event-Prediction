@@ -30,20 +30,27 @@ class LightingVanillaLSTM(pl.LightningModule):
         #c0 = torch.randn(2, 32) #TODO: fix the shape
         #tuple_tensor = (torch.tensor)
         #lstm_out, (hn, cn) = self.lstm(input,(h0, c0))
+        #print(input.shape)dis
         #print(input.shape)
-        
+        #if len(input.shape) == 2:
         mask = torch.all(input != -200, dim=1)
         #Use the mask to select non-empty rows
         input = input[mask]
         #print(input.shape)
-
+        lstm_out, (hn, cn) = self.lstm(input)
+        return lstm_out.mean()
+        print(input.shape)
+        mask = torch.all(input != -200, dim=1)
+        #Use the mask to select non-empty rows
+        input = input[mask]
+        print(input.shape)
         lstm_out, (hn, cn) = self.lstm(input)
         #prediction = self.linear(lstm_out[:,-1])
         #prediction = lstm_out[-1] #FIXME: fix the prediction
         #prediction = lstm_out.mean()
         return lstm_out.mean()
         return prediction
-    
+    torch.Size([2413, 13])
     def configure_optimizers(self) -> Any:
         return Adam(self.parameters(), lr=0.0001)
 
@@ -61,19 +68,32 @@ class LightingVanillaLSTM(pl.LightningModule):
     
     def validation_step(self, batch, batch_idx):
         # Calculate loss and log training process
+        #print("Validation step")
         x, y = batch
+        tot_loss = 0
+        number_samples = y.shape[0]
+        for i in range(y.shape[0]):
+            y_hat = self(x[i])
+            temp_loss = self.loss(y_hat, y[i])
+            self.log('val_loss', temp_loss, prog_bar=True)
+            tot_loss += temp_loss
+        return tot_loss/number_samples
+        print(x.shape)
+        print(y.shape)
         y_hat = self(x)
-
+        print(y_hat.shape)
+        print(y.shape)
         temp_loss = self.loss(y_hat, y)
+        print(temp_loss.shape)
         #result = pl.EvalResult(loss)
         #result.log('train_loss', loss, prog_bar=True)
         self.log('val_loss', temp_loss, prog_bar=True)   
         return temp_loss
 
-def evaluate_vanilla_LSTM(model, train, test, max_epochs=5):
+def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=5):
     print("Using {torch.cuda.get_device_name(DEVICE)}")
     trainer = pl.Trainer(max_epochs=max_epochs)
-    trainer.fit(model, train_dataloaders=train) #, val_dataloaders=val)
+    trainer.fit(model, train_dataloaders=train, val_dataloaders=val)
     #result = model.evaluate(test_dataloaders=test)
     # Test the model
     # In test phase, we don't need to compute gradients (for memory efficiency)
