@@ -1158,46 +1158,45 @@ evaluate_T_LSTM()
 
 if TIME_LSTM:
     if LOAD_TIME_DF:
-        vanilla_df = read_csv("appo/time_df.csv")
-        vanilla_df = vanilla_df.fillna(-100)
+        tlsmt_df = read_csv("appo/time_df.csv")
+        tlsmt_df = tlsmt_df.fillna(-100)
     else:
-        vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+        tlsmt_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
         if SAVE_TIME_DF:
-            vanilla_df.to_csv(f"appo/time_df.csv", index=False)
+            tlsmt_df.to_csv(f"appo/time_df.csv", index=False)
             print(f"time_df.csv exported")
 
-    vanilla_df['data']=vanilla_df['data'].astype(str).replace({'-':''}, regex=True)
+    tlsmt_df['data']=tlsmt_df['data'].astype(str).replace({'-':''}, regex=True)
 
+    X_columns = [col for col in tlsmt_df if col not in ['idcentro', 'idana','label','data']]
+    T_columns = [col for col in tlsmt_df if col in ['data']]
+    y_columns = ['label']
 
-
-
-
-'''
-# At first, we merge with the patient data
-features_Tlstm = pd.merge(df_diagnosi, df_anagrafica, on=['idcentro','idana','idcopy'])
-
-# We create a single ID column that combines the other three:
-features_Tlstm['id'] = features_Tlstm.apply(lambda x: f"{x['idcentro']}_{x['idana']}_{x['idcopy']}",axis=1)
-
-# We reorder the columns
-features_Tlstm = features_Tlstm[['id']+[x for x in features_Tlstm.columns if x!='id']]
-
-# We drop the other ID_columns
-features_Tlstm.drop(columns=['idcentro','idana','idcopy'], inplace=True)
-
-# We categorize the columns that contain text
-categorical_columns = ['codiceamd', 'valore', 'sesso']
-for col in categorical_columns:
-    features_Tlstm[col] = features_Tlstm[col].astype('category')
-    features_Tlstm[col] = features_Tlstm[col].cat.codes
-
-# We convert every columns into float type
-numerical_columns = [col for col in features_Tlstm.columns if col not in ['id','data']]
-for col in numerical_columns:
-    features_Tlstm[col] = features_Tlstm[col].astype('float')
-features_Tlstm['data']=features_Tlstm['data'].replace({'-':''}, regex=True)
-features_Tlstm.head(10)
-'''
+    grouped_events = tlsmt_df.groupby(['idana', 'idcentro'])
+    i=1
+    data_train_batches=list()
+    labels_train_batches=list()
+    elapsed_train_batches=list()
+    number_train_batches=0
+    for it, (ids, features) in enumerate(grouped_events):
+        #batch = features[features['id']==ids].sort_values(['data'])
+        X = features[X_columns]
+        X=np.resize(X, (X.shape[0],1,X.shape[1]))
+        Z = features[T_columns]
+        data_train_batches.append(X)
+        labels_train_batches.append(features[y_columns])
+        elapsed_train_batches.append(Z)
+        number_train_batches+=1
+        if it % 200 == 0:
+            print(f"Patient {it}/{len(grouped_events)}")
+    
+    learning_rate = 0.01
+    training_epochs = 50
+    dropout_prob = 0.5
+    hidden_dim = 1
+    fc_dim = 1
+    TLSTM.training(learning_rate, training_epochs, dropout_prob, hidden_dim, fc_dim, data_train_batches, labels_train_batches, elapsed_train_batches, number_train_batches)
+#    training(learning_rate, training_epochs, dropout_prob, hidden_dim, fc_dim)
 
 
 ############################
