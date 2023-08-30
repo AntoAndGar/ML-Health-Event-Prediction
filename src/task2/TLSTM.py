@@ -1,5 +1,9 @@
 #We define the T-LSTM
-import tensorflow as tf
+# We have to use a version of tensorflow lower than 2.0
+import tensorflow.compat.v1 as tf
+# disabling eager mode
+tf.compat.v1.disable_eager_execution()
+
 
 class TLSTM(object):
     def init_weights(self, input_dim, output_dim, name, std=0.1, reg=None):
@@ -176,11 +180,13 @@ class TLSTM(object):
         T = tf.matmul(T, Ones)
 
         return T
-exit()
+
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_auc_score
 from sklearn.utils import shuffle
-exit()
+
+import numpy as np
+
 def training(learning_rate,training_epochs,train_dropout_prob,hidden_dim,fc_dim, data_train_batches, labels_train_batches, elapsed_train_batches, number_train_batches):
 
     input_dim = data_train_batches[0].shape[2]

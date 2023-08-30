@@ -111,7 +111,6 @@ def read_csv(filename):
 
 
 print("Generating Futures...")
-
 # Read all the dataset concurrently and store them in a dictionary with the name of the file as key
 with futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
     df_list = dict()
@@ -1117,7 +1116,7 @@ def evaluate_PubMedBERT():
     trainer.fit(model=model, datamodule=dm)
 
     return
-
+'''
 def evaluate_T_LSTM():
     df = TLSTM.create_dataset(
         df_anagrafica,
@@ -1152,19 +1151,29 @@ def evaluate_T_LSTM():
     )
     trainer.fit(model=model, datamodule=dm)
     return
-
-evaluate_T_LSTM()
+'''
+#evaluate_T_LSTM()
 # evaluate_PubMedBERT()
+
+
+import sys,time,random
+def progressBar(count_value, total, suffix=''):
+    bar_length = 100
+    filled_up_Length = int(round(bar_length* count_value / float(total)))
+    percentage = round(100.0 * count_value/float(total),1)
+    bar = '=' * filled_up_Length + '-' * (bar_length - filled_up_Length)
+    sys.stdout.write('[%s] %s%s ...%s\r' %(bar, percentage, '%', suffix))
+    sys.stdout.flush()
 
 if TIME_LSTM:
     if LOAD_TIME_DF:
-        tlsmt_df = read_csv("appo/time_df.csv")
+        tlsmt_df = read_csv("appo/vanilla_df.csv")
         tlsmt_df = tlsmt_df.fillna(-100)
     else:
         tlsmt_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
         if SAVE_TIME_DF:
-            tlsmt_df.to_csv(f"appo/time_df.csv", index=False)
-            print(f"time_df.csv exported")
+            tlsmt_df.to_csv(f"appo/vanilla_df.csv", index=False)
+            print(f"vanilla_df.csv exported")
 
     tlsmt_df['data']=tlsmt_df['data'].astype(str).replace({'-':''}, regex=True)
 
@@ -1187,8 +1196,7 @@ if TIME_LSTM:
         labels_train_batches.append(features[y_columns])
         elapsed_train_batches.append(Z)
         number_train_batches+=1
-        if it % 200 == 0:
-            print(f"Patient {it}/{len(grouped_events)}")
+        progressBar(number_train_batches,len(grouped_events))
     
     learning_rate = 0.01
     training_epochs = 50
