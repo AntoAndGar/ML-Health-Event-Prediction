@@ -187,6 +187,11 @@ from sklearn.utils import shuffle
 
 import numpy as np
 
+import sys
+import math
+#import cPickle
+
+
 def training(learning_rate,training_epochs,train_dropout_prob,hidden_dim,fc_dim, data_train_batches, labels_train_batches, elapsed_train_batches, number_train_batches):
 
     input_dim = data_train_batches[0].shape[2]
@@ -204,7 +209,7 @@ def training(learning_rate,training_epochs,train_dropout_prob,hidden_dim,fc_dim,
         sess.run(init)
         for epoch in range(training_epochs):  #
             # Loop over all batches
-            total_cost = 0
+            total_cost = 0 # It seems useless
             for i in range(number_train_batches):  #
                 # batch_xs is [number of patients x sequence length x input dimensionality]
                 batch_xs, batch_ys, batch_ts = data_train_batches[i], labels_train_batches[i], \
@@ -212,16 +217,19 @@ def training(learning_rate,training_epochs,train_dropout_prob,hidden_dim,fc_dim,
                 batch_ts = np.reshape(batch_ts, [batch_ts.shape[0], batch_ts.shape[1]])
                 sess.run(optimizer,feed_dict={lstm.input: batch_xs, lstm.labels: batch_ys,\
                                               lstm.keep_prob:train_dropout_prob, lstm.time:batch_ts})
+            print("Epoch:", '%04d' % (epoch + 1))
 
 
         print("Training is over!")
 
+        #TODO: save the model
 
         Y_pred = []
         Y_true = []
         Labels = []
         Logits = []
         for i in range(number_train_batches):
+            print("Batch:", '%04d' % (i + 1))
             batch_xs, batch_ys, batch_ts = data_train_batches[i], labels_train_batches[i], \
                                                      elapsed_train_batches[i]
             batch_ts = np.reshape(batch_ts, [batch_ts.shape[0], batch_ts.shape[1]])
@@ -240,6 +248,7 @@ def training(learning_rate,training_epochs,train_dropout_prob,hidden_dim,fc_dim,
                 Y_pred = y_pred_train
                 Labels = labels_train
                 Logits = logits_train
+
 
         total_acc = accuracy_score(Y_true, Y_pred)
         total_auc = roc_auc_score(Labels, Logits, average='micro')

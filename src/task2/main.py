@@ -67,6 +67,10 @@ TIME_LSTM: bool = True
 LOAD_TIME_DF: bool = True
 SAVE_TIME_DF: bool = False
 
+# DELTA_ETA PARAMETERS
+DELTA_ETA: bool = True
+WRITE_DELTA_ETA_DF: bool = True
+DELTA_ETA_PATH = "delta_eta_df"
 
 BALANCING = "standard"
 
@@ -1197,14 +1201,93 @@ if TIME_LSTM:
         elapsed_train_batches.append(Z)
         number_train_batches+=1
         progressBar(number_train_batches,len(grouped_events))
+        if number_train_batches > 2000:
+            break
     
     learning_rate = 0.01
-    training_epochs = 50
+    training_epochs = 1 #50
     dropout_prob = 0.5
     hidden_dim = 1
     fc_dim = 1
     TLSTM.training(learning_rate, training_epochs, dropout_prob, hidden_dim, fc_dim, data_train_batches, labels_train_batches, elapsed_train_batches, number_train_batches)
 #    training(learning_rate, training_epochs, dropout_prob, hidden_dim, fc_dim)
+
+
+#####################
+# Delta-Eta
+#####################
+
+if DELTA_ETA:
+    df_anagrafica['eta'] =  (df_anagrafica["annodecesso"].fillna(pd.Timestamp.now()) - df_anagrafica['annonascita']) # /np.timedelta64(1, 'Y')
+    print(df_anagrafica['eta'].max())
+    # TODO: PARAMETRICE THIS 
+    MAXIMUM_AGE_FACTOR = 1.05
+    maximum_age_days = (df_anagrafica['eta'].max()/np.timedelta64(1, 'D')) * MAXIMUM_AGE_FACTOR
+    maximum_age_years = (df_anagrafica['eta'].max()/np.timedelta64(1, 'Y')) * MAXIMUM_AGE_FACTOR
+    df_anagrafica['delta_decesso'] = df_anagrafica['eta']/np.timedelta64(1, 'Y') / maximum_age_years
+    df_anagrafica.loc[df_anagrafica['annodecesso'].isnull(), 'delta_decesso'] = np.nan
+    df_anagrafica['delta_annoprimoaccesso'] = (df_anagrafica['annoprimoaccesso'] - df_anagrafica['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_anagrafica['delta_annodiagnosidiabete'] = (df_anagrafica['annodiagnosidiabete'] - df_anagrafica['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_anagrafica.drop(columns=['eta', 'annoprimoacceso', 'annodiasiagnosidiabete', 'annodecesso'], inplace=True)
+
+    df_diagnosi.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_diagnosi['delta_data'] = (df_diagnosi['data'] - df_diagnosi['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_esami_lab_par.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_esami_lab_par['delta_data'] = (df_esami_lab_par['data'] - df_esami_lab_par['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_esami_lab_par_cal.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_esami_lab_par_cal['delta_data'] = (df_esami_lab_par_cal['data'] - df_esami_lab_par_cal['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_esami_stru.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_esami_stru['delta_data'] = (df_esami_stru['data'] - df_esami_stru['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_pres_diab_farm.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_pres_diab_farm['delta_data'] = (df_pres_diab_farm['data'] - df_pres_diab_farm['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_pres_diab_no_farm.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_pres_diab_no_farm['delta_data'] = (df_pres_diab_no_farm['data'] - df_pres_diab_no_farm['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    df_pres_no_diab.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_pres_no_diab['delta_data'] = (df_pres_no_diab['data'] - df_pres_no_diab['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+
+    #df_anagrafica.drop(columns=['annonascita'], inplace=True)
+    df_diagnosi.drop(columns=['annonascita'], inplace=True)
+    df_esami_lab_par.drop(columns=['annonascita'], inplace=True)
+    df_esami_lab_par_cal.drop(columns=['annonascita'], inplace=True)
+    df_esami_stru.drop(columns=['annonascita'], inplace=True)
+    df_pres_diab_farm.drop(columns=['annonascita'], inplace=True)
+    df_pres_diab_no_farm.drop(columns=['annonascita'], inplace=True)
+    df_pres_no_diab.drop(columns=['annonascita'], inplace=True)
+
+    if WRITE_DELTA_ETA_DF:
+        df_anagrafica.to_csv(f"{DELTA_ETA_PATH}/df_anagrafica_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_anagrafica_delta.csv exported")
+
+        df_diagnosi.to_csv(f"{DELTA_ETA_PATH}/df_diagnosi_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_diagnosi_delta.csv exported")
+
+        df_esami_lab_par.to_csv(f"{DELTA_ETA_PATH}/df_esami_lab_par_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_esami_lab_par_delta.csv exported")
+
+        df_esami_lab_par_cal.to_csv(f"{DELTA_ETA_PATH}/df_esami_lab_par_cal_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_esami_lab_par_cal_delta.csv exported")
+
+        df_esami_stru.to_csv(f"{DELTA_ETA_PATH}/df_esami_stru_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_esami_stru_delta.csv exported")
+
+        df_pres_diab_farm.to_csv(f"{DELTA_ETA_PATH}/df_pres_diab_farm_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_pres_diab_farm_delta.csv exported")
+
+        df_pres_diab_no_farm.to_csv(f"{DELTA_ETA_PATH}/df_pres_diab_no_farm_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_pres_diab_no_farm_delta.csv exported")
+
+        df_pres_no_diab.to_csv(f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv", index=False)
+        print(f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv exported")
+
+
+
 
 
 ############################
