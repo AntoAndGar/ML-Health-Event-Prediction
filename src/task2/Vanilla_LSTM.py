@@ -130,7 +130,7 @@ def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=5):
     # why lose time using keras or tensorflow ?
     # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
 
-def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab):
+def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab, delta=False):
     df_esami_par['tipo'] = 'esame'
     df_esami_par_cal['tipo'] = 'esame'
     df_esami_stru['tipo'] = 'esame'
@@ -180,10 +180,11 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
 
     # Convert datatime of year to float or int [it's the same]
-    final_df['annodecesso'] = final_df['annodecesso'].dt.year
-    final_df['annodiagnosidiabete'] = final_df['annodiagnosidiabete'].dt.year
-    final_df['annoprimoaccesso'] = final_df['annoprimoaccesso'].dt.year
-    final_df['annonascita'] = final_df['annonascita'].dt.year  
+    if not delta:
+        final_df['annodecesso'] = final_df['annodecesso'].dt.year
+        final_df['annodiagnosidiabete'] = final_df['annodiagnosidiabete'].dt.year
+        final_df['annoprimoaccesso'] = final_df['annoprimoaccesso'].dt.year
+        final_df['annonascita'] = final_df['annonascita'].dt.year  
 
     final_df = final_df.fillna(-100)
     print("Dtypes: \t", final_df.dtypes)

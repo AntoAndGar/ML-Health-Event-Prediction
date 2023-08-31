@@ -61,9 +61,10 @@ VANILLA_LSTM: bool = False
 LOAD_VANILLA_DF: bool = False
 SAVE_VANILLA_DF: bool = True
 DROP_ANNI: bool = False
+LSTM_DF = "lstm_df"
 
 # TIME LSTM PARAMETERS
-TIME_LSTM: bool = True
+TIME_LSTM: bool = False
 LOAD_TIME_DF: bool = True
 SAVE_TIME_DF: bool = False
 
@@ -71,6 +72,12 @@ SAVE_TIME_DF: bool = False
 DELTA_ETA: bool = True
 WRITE_DELTA_ETA_DF: bool = True
 DELTA_ETA_PATH = "delta_eta_df"
+
+# DELTA VANILLA LSTM PARAMETERS
+DELTA_VANILLA_LSTM: bool = False
+LOAD_DELTA_VANILLA_DF: bool = False
+SAVE_DELTA_VANILLA_DF: bool = True
+DELTA_LSTM_DF = "lstm_df"
 
 BALANCING = "standard"
 
@@ -471,11 +478,11 @@ if VANILLA_LSTM:
             vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
 
         if SAVE_VANILLA_DF:
-            vanilla_df.to_csv(f"appo/vanilla_df.csv", index=False)
+            vanilla_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
             print(f"vanilla_df.csv exported")
     else:
         print("loading vanilla data")
-        vanilla_df= read_csv("appo/vanilla_df.csv")
+        vanilla_df= read_csv("{LSTM_DF}/vanilla_df.csv")
         vanilla_df = vanilla_df.fillna(-100)
 
     len_input = len(vanilla_df.columns)-4 #13
@@ -1171,12 +1178,12 @@ def progressBar(count_value, total, suffix=''):
 
 if TIME_LSTM:
     if LOAD_TIME_DF:
-        tlsmt_df = read_csv("appo/vanilla_df.csv")
+        tlsmt_df = read_csv(f"{LSTM_DF}/vanilla_df.csv")
         tlsmt_df = tlsmt_df.fillna(-100)
     else:
         tlsmt_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
         if SAVE_TIME_DF:
-            tlsmt_df.to_csv(f"appo/vanilla_df.csv", index=False)
+            tlsmt_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
             print(f"vanilla_df.csv exported")
 
     tlsmt_df['data']=tlsmt_df['data'].astype(str).replace({'-':''}, regex=True)
@@ -1286,8 +1293,88 @@ if DELTA_ETA:
         df_pres_no_diab.to_csv(f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv", index=False)
         print(f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv exported")
 
+    if DELTA_VANILLA_LSTM:
+        if not LOAD_DELTA_VANILLA_DF:
+            vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab, delta=True) 
+            if SAVE_DELTA_VANILLA_DF:
+                vanilla_df.to_csv(f"{DELTA_LSTM_DF}/vanilla_df.csv", index=False)
+                print(f"vanilla_df.csv exported")
+        else:
+            print("loading vanilla data")
+            vanilla_df= read_csv("{DELTA_LSTM_DF}/vanilla_df.csv")
+            vanilla_df = vanilla_df.fillna(-100)
 
+        len_input = len(vanilla_df.columns)-3
+        vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
+        grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
+        inputs = []
+        labels = []
+        max_history_len = 0
+        count = 0
 
+        for name, group in grouped_vanilla:
+            if group.values.shape[0] > max_history_len:
+                max_history_len = group.values.shape[0]
+
+        k = 2
+        while k*2 < max_history_len:
+            k = k*2
+        altrocount = 0
+        print("k max history len: ", k)
+        for name, group in grouped_vanilla:
+            vanilla_patient_hystory = group.sort_values(by=["data"])
+            labels.append(
+                vanilla_patient_hystory["label"].values[0]
+                )
+            vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
+
+            if vanilla_patient_hystory.values.shape[0] > k:
+                altrocount += 1
+                inputs.append(vanilla_patient_hystory.values[k:])
+            else:
+                inputs.append(vanilla_patient_hystory.values)
+            continue
+            count += 1
+            if count >= 50:
+                break
+        print("altrocount: ", altrocount)
+        from torch.nn.utils.rnn import pad_sequence
+
+        tensor_list = [
+            torch.cat((torch.zeros(
+                max_history_len - len(sublist),len_input) - 200.0,
+                torch.tensor(sublist)))
+            for sublist in inputs
+            ]
+        padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
+        #padded_tensor = padded_tensor.to(torch.long)
+        padded_tensor = padded_tensor.to(torch.float32)
+        bool_tensor = torch.tensor(labels, dtype=torch.bool)
+        bool_tensor = torch.tensor(labels, dtype=torch.float32)
+        print("Valori unici in bool_tensor:")
+        print(torch.unique(bool_tensor, return_counts=True))
+
+        # Now you can use train_loader, val_loader, and test_loader for training, validation, and testing.
+        vanilla_dataset = Vanilla_LSTM.TensorDataset(padded_tensor, bool_tensor)
+
+        # Define the sizes for train, validation, and test sets
+        train_size = int(van_train * len(vanilla_dataset))
+        val_size = int(van_val * len(vanilla_dataset))
+        test_size = len(vanilla_dataset) - train_size - val_size
+
+        # Split the dataset into train, validation, and test sets
+        vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
+
+        # Create DataLoader instances for train, validation, and test sets
+        batch_size = 16  # Adjust as needed
+        train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+
+        vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+        vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
+        vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+        Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
 
 
 ############################
@@ -1295,14 +1382,7 @@ if DELTA_ETA:
 ############################
 
 # Source https://github.com/bardhprenkaj/ML_labs/blob/main/src/lab1/Data_Feature_preprocessing.ipynb
-"""
-from sklearn.datasets import make_classification
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import RandomUnderSampler
-from imblearn.pipeline import Pipeline
-from matplotlib import pyplot
-from numpy import where
-"""
+
 #####################
 # SMOTE
 #####################
