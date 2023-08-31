@@ -14,18 +14,16 @@ import Vanilla_LSTM
 from datetime import datetime
 from typing import Optional
 
-
 from pytorch_lightning import (
     LightningDataModule,
     LightningModule,
     Trainer,
     seed_everything,
 )
-
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from torch.utils.data import DataLoader, random_split
-
+from torch.nn.utils.rnn import pad_sequence
 
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
@@ -42,8 +40,6 @@ import tensorflow as tf
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_auc_score
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
 SEED = 0
 rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
@@ -53,12 +49,16 @@ MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
-PRESCRIZIONI = True
-BERT_DATASET = False
-CREATE_BERT_DATASET = False
-PARALLEL_LOAD_DATASET = True
-WRITE_DATASET = False
+PRESCRIZIONI: bool = True
+BERT_DATASET: bool = False
+CREATE_BERT_DATASET: bool = False
+PARALLEL_LOAD_DATASET: bool = True
+WRITE_DATASET: bool = False
 DATASET_NAME = "dataset_def.pkl"
+EVALUATE_BERT: bool = False
+
+TRAIN_TLSTM: bool = False
+EVALUATE_TLSTM: bool = False
 
 # VANILLA LSTM PARAMETERS
 VANILLA_LSTM: bool = False
@@ -67,10 +67,9 @@ SAVE_VANILLA_DF: bool = True
 DROP_ANNI: bool = False
 
 # TIME LSTM PARAMETERS
-TIME_LSTM: bool = True
+TIME_LSTM: bool = False
 LOAD_TIME_DF: bool = True
 SAVE_TIME_DF: bool = False
-
 
 BALANCING = "standard"
 
@@ -529,7 +528,6 @@ if VANILLA_LSTM:
         if count >= 50:
             break
     print("altrocount: ", altrocount)
-    from torch.nn.utils.rnn import pad_sequence
 
     tensor_list = [
         torch.cat(
@@ -1168,56 +1166,75 @@ def training_tlstm(
     hidden_dim,
     fc_dim,
     key,
-    model_path="tlstm_model",
+    model_path="./tlstm_dir/tlstm_model",
 ):
     print("Training TLSTM")
-    # number_train_batches = int(data_train_batches.reduce(0, lambda x, _: x + 1))
-    # input_dim = 12  # tf.shape(data_train_batches.take(1))[2]
-    # output_dim = 2  # tf.shape(labels_train_batches.take(1))[1]
+
     input_dim = data_train_batches[0].shape[2]
     output_dim = labels_train_batches[0].shape[1]
 
     lstm = TLSTM.TLSTM(input_dim, output_dim, hidden_dim, fc_dim, key)
 
-    # cross_entropy, y_pred, y, logits, labels = lstm.get_cost_acc()
-    # optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate).minimize(
-    #     cross_entropy
-    # )
+    cross_entropy, y_pred, y, logits, labels = lstm.get_cost_acc()
+    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate).minimize(
+        cross_entropy
+    )
 
-    # init = tf.compat.v1.global_variables_initializer()
-    # saver = tf.compat.v1.train.Saver()
-    tf.compat.v1.disable_eager_execution()
-    sav = tf.compat.v1.train.import_meta_graph("./tlstm_dir/tlstm_model.meta")
+    init = tf.compat.v1.global_variables_initializer()
+    saver = tf.compat.v1.train.Saver()
 
     with tf.compat.v1.Session() as sess:
-        # sess.run(init)
-        #     for epoch in range(training_epochs):  #
-        #         # Loop over all batches
-        #         total_cost = 0
-        #         for i in range(number_train_batches):  #
-        #             # batch_xs is [number of patients x sequence length x input dimensionality]
-        #             batch_xs, batch_ys, batch_ts = (
-        #                 data_train_batches[i],
-        #                 labels_train_batches[i],
-        #                 elapsed_train_batches[i],
-        #             )
-        #             batch_ts = np.reshape(batch_ts, [batch_ts.shape[0], batch_ts.shape[1]])
-        #             sess.run(
-        #                 optimizer,
-        #                 feed_dict={
-        #                     lstm.input: batch_xs,
-        #                     lstm.labels: batch_ys,
-        #                     lstm.keep_prob: train_dropout_prob,
-        #                     lstm.time: batch_ts,
-        #                 },
-        #             )
-        #             print(f"Epoch: {epoch + 1} batch: {i}")
+        sess.run(init)
+        for epoch in range(training_epochs):  #
+            # Loop over all batches
+            total_cost = 0
+            for i in range(number_train_batches):  #
+                # batch_xs is [number of patients x sequence length x input dimensionality]
+                batch_xs, batch_ys, batch_ts = (
+                    data_train_batches[i],
+                    labels_train_batches[i],
+                    elapsed_train_batches[i],
+                )
+                batch_ts = np.reshape(batch_ts, [batch_ts.shape[0], batch_ts.shape[1]])
+                sess.run(
+                    optimizer,
+                    feed_dict={
+                        lstm.input: batch_xs,
+                        lstm.labels: batch_ys,
+                        lstm.keep_prob: train_dropout_prob,
+                        lstm.time: batch_ts,
+                    },
+                )
+                print(f"Epoch: {epoch + 1} batch: {i}")
 
-        #     print("Training is over!")
-        #     saver.save(sess, model_path)
+        print("Training is over!")
+        saver.save(sess, model_path)
 
-        sav.restore(sess, tf.compat.v1.train.latest_checkpoint("./tlstm_dir/"))
-        print("Testing TLSTM")
+
+def testing_tlstm(
+    data_train_batches,
+    labels_train_batches,
+    elapsed_train_batches,
+    number_train_batches,
+    train_dropout_prob,
+    hidden_dim,
+    fc_dim,
+    key,
+    model_path="./tlstm_dir/tlstm_model",
+):
+    print("Testing TLSTM")
+    input_dim = data_train_batches[0].shape[2]
+    output_dim = labels_train_batches[0].shape[1]
+
+    lstm = TLSTM.TLSTM(input_dim, output_dim, hidden_dim, fc_dim, key)
+
+    tf.compat.v1.disable_eager_execution()
+    sav = tf.compat.v1.train.import_meta_graph(f"{model_path}.meta")
+
+    with tf.compat.v1.Session() as sess:
+        sav.restore(
+            sess, tf.compat.v1.train.latest_checkpoint(f"./{model_path.split('/')[1]}/")
+        )
 
         Y_pred = []
         Y_true = []
@@ -1254,10 +1271,10 @@ def training_tlstm(
                 Logits = logits_train
 
         total_acc = accuracy_score(Y_true, Y_pred)
-        total_auc = roc_auc_score(Labels, Logits, average="micro")
-        total_auc_macro = roc_auc_score(Labels, Logits, average="macro")
         print("Train Accuracy = {:.3f}".format(total_acc))
+        total_auc = roc_auc_score(Labels, Logits, average="micro")
         print("Train AUC = {:.3f}".format(total_auc))
+        total_auc_macro = roc_auc_score(Labels, Logits, average="macro")
         print("Train AUC Macro = {:.3f}".format(total_auc_macro))
 
 
@@ -1277,7 +1294,7 @@ def evaluate_T_LSTM():
     feature, labels, elapsed_time = TLSTM.create_tensor_dataset(df)
 
     len_batch = 7
-    num_batch = 100 #len(feature) // len_batch
+    num_batch = len(feature) // len_batch
     print("num_batch: ", num_batch)
 
     def split_padded(a, n):
@@ -1298,23 +1315,10 @@ def evaluate_T_LSTM():
         else:
             raise ValueError("The input array must be 1D, 2D or 3D")
 
-    train_data_batches = split_padded(feature, num_batch)[:100]
-    labels_train_batches = split_padded(labels, num_batch)[:100]
-    elapsed_train_batches = split_padded(elapsed_time, num_batch)[:100]
-    # print(train_data_batches.shape)
-    # print(labels_train_batches.shape)
-    # print(elapsed_train_batches.shape)
-    # print(labels_train_batches[0])
-
-    # can't use tf dataset for tlstm
-    # train_data_batches = tf.data.Dataset.from_tensor_slices(feature).batch(len_batch)
-    # labels_train_batches = tf.data.Dataset.from_tensor_slices(labels).batch(len_batch)
-    # elapsed_train_batches = tf.data.Dataset.from_tensor_slices(elapsed_time).batch(
-    #     len_batch
-    # )
-    # val_data_batches = val_feature.batch(16)
-    # labels_val_batches = val_labels.batch(16)
-    # elapsed_val_batches = val_elapsed_time.batch(16)
+    train_data_batches = split_padded(feature, num_batch)
+    labels_train_batches = split_padded(labels, num_batch)
+    elapsed_train_batches = split_padded(elapsed_time, num_batch)
+    print("train_data_batches: ", train_data_batches.shape)
 
     learning_rate = 1e-3
     training_epochs = 1
@@ -1323,25 +1327,49 @@ def evaluate_T_LSTM():
     fc_dim = 64
     training_mode = 1
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    if TRAIN_TLSTM:
+        training_tlstm(
+            train_data_batches,
+            labels_train_batches,
+            elapsed_train_batches,
+            num_batch,
+            learning_rate,
+            training_epochs,
+            dropout_prob,
+            hidden_dim,
+            fc_dim,
+            training_mode,
+        )
 
-    training_tlstm(
-        train_data_batches,
-        labels_train_batches,
-        elapsed_train_batches,
-        num_batch,
-        learning_rate,
-        training_epochs,
+    # TODO: fix this because overlapping train and test data
+    len_val_batch = 63
+    num_val_batch = len(feature) // len_val_batch
+    num_batch_to_select = 300
+    val_data_batches = split_padded(feature, num_val_batch)[:num_batch_to_select]
+    labels_val_batches = split_padded(labels, num_val_batch)[:num_batch_to_select]
+    elapsed_val_batches = split_padded(elapsed_time, num_val_batch)[
+        :num_batch_to_select
+    ]
+    print("val_data_batches: ", val_data_batches.shape)
+
+    testing_tlstm(
+        val_data_batches,
+        labels_val_batches,
+        elapsed_val_batches,
+        num_batch_to_select,
         dropout_prob,
         hidden_dim,
         fc_dim,
         training_mode,
     )
+
     return
 
 
-evaluate_T_LSTM()
-# evaluate_PubMedBERT()
+if EVALUATE_TLSTM:
+    evaluate_T_LSTM()
+if EVALUATE_BERT:
+    evaluate_PubMedBERT()
 
 if TIME_LSTM:
     if LOAD_TIME_DF:
