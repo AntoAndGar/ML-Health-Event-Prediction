@@ -1,21 +1,11 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, TensorDataset
-import pandas as pd
 import numpy as np
-from pytorch_lightning import (
-    LightningModule,
-    Trainer,
-    seed_everything,
-    LightningDataModule,
-)
-from pytorch_lightning.callbacks import ModelCheckpoint
+import tensorflow as tf
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import pandas as pd
+
+# from sklearn.model_selection import train_test_split
 
 SEED = 0
-seed_everything(SEED, workers=True)
-GEN_SEED = torch.Generator().manual_seed(SEED)
 
 
 def create_dataset(
@@ -93,8 +83,8 @@ def create_dataset(
     # Convert 'valore' to numeric
     final_df["valore"] = pd.to_numeric(final_df["valore"], errors="coerce")
 
-    # Fill NaNs with -100
-    final_df = final_df.fillna(-100)
+    # Fill NaNs with -1
+    final_df = final_df.fillna(-1)
 
     # Check for non-numeric 'valore' values
     non_numeric_valores = final_df["valore"].unique()
@@ -104,19 +94,110 @@ def create_dataset(
     return final_df
 
 
-class TLSTM(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, fc_dim, train):
-        super(TLSTM, self).__init__()
+def get_dataset_partitions_tf(
+    ds, ds_size, train_split=0.8, val_split=0.2, shuffle=True, shuffle_size=10000
+):
+    if shuffle:
+        ds = ds.shuffle(shuffle_size, seed=SEED)
 
+    train_size = int(train_split * ds_size)
+    val_size = int(val_split * ds_size)
+
+    train_ds = ds.take(train_size)
+    val_ds = ds.skip(train_size).take(val_size)
+
+    return train_ds, val_ds
+
+
+def create_tensor_dataset(input_df):
+    # Calculate the input length directly
+    len_input = len(input_df.columns) - 4
+
+    # Group by "idana" and "idcentro" and sort each group by "data"
+    grouped = input_df.groupby(["idana", "idcentro"], group_keys=True)
+
+    inputs = []
+    labels = []
+    elapsed_time = []
+    max_history_len = 0
+
+    for _, group in grouped:
+        patient_history = group.sort_values(by=["data"])
+        labels.append(
+            patient_history["label"].iloc[0]
+        )  # Use iloc to access the first item
+        elapsed_time.append(patient_history["delta_events"].to_numpy(dtype=np.float32))
+        patient_history = patient_history.drop(
+            columns=["idana", "idcentro", "label", "data", "delta_events"]
+        )
+        nested_list = patient_history.to_numpy(dtype=np.float32)
+        inputs.append(nested_list)
+
+        max_history_len = max(
+            max_history_len, nested_list.shape[0]
+        )  # Update max_history_len
+
+    # Pad sequences using pad_sequences
+    padded_inputs = pad_sequences(
+        inputs, maxlen=512, dtype=np.float32, padding="pre", value=-100.0
+    )
+    padded_elapsed_time = pad_sequences(
+        elapsed_time, maxlen=512, dtype=np.float32, padding="pre", value=0.0
+    )
+    print(padded_inputs.shape)
+    print(padded_elapsed_time.shape)
+
+    bool_array = np.array(labels, dtype=np.float32)
+    print(bool_array)
+    print(bool_array.shape)
+    bool_array = np.repeat(np.expand_dims(bool_array, axis=1), 512, axis=1)
+    print(bool_array)
+    print(bool_array.shape)
+
+    # Printing unique values in bool_array
+    unique_values, value_counts = np.unique(bool_array, return_counts=True)
+    print("Unique values in bool_array:")
+    print(unique_values)
+    print("Value counts:")
+    print(value_counts)
+    print("Elapsed time: ", len(elapsed_time))
+
+    return padded_inputs, bool_array, padded_elapsed_time
+
+
+# from https://github.com/illidanlab/T-LSTM/blob/master/TLSTM.py
+class TLSTM(object):
+    def init_weights(self, input_dim, output_dim, name, std=0.1, reg=None):
+        return tf.compat.v1.get_variable(
+            name,
+            shape=[input_dim, output_dim],
+            initializer=tf.random_normal_initializer(0.0, std),
+            regularizer=reg,
+        )
+
+    def init_bias(self, output_dim, name):
+        return tf.compat.v1.get_variable(
+            name, shape=[output_dim], initializer=tf.constant_initializer(1.0)
+        )
+
+    def no_init_weights(self, input_dim, output_dim, name):
+        return tf.compat.v1.get_variable(name, shape=[input_dim, output_dim])
+
+    def no_init_bias(self, output_dim, name):
+        return tf.compat.v1.get_variable(name, shape=[output_dim])
+
+    def __init__(self, input_dim, output_dim, hidden_dim, fc_dim, train):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.train_mode = train
 
-        # Create PyTorch tensors instead of TensorFlow placeholders
-        self.input = nn.Parameter(torch.Tensor(), requires_grad=True)
-        self.labels = nn.Parameter(torch.Tensor(), requires_grad=True)
-        self.time = nn.Parameter(torch.Tensor(), requires_grad=True)
-        self.keep_prob = nn.Parameter(torch.Tensor(), requires_grad=True)
+        # [batch size x seq length x input dim]
+        tf.compat.v1.disable_eager_execution()
+        self.input = tf.compat.v1.placeholder(
+            "float", shape=[None, None, self.input_dim]
+        )
+        self.labels = tf.compat.v1.placeholder("float", shape=[None, output_dim])
+        self.time = tf.compat.v1.placeholder("float", shape=[None, None])
+        self.keep_prob = tf.compat.v1.placeholder(tf.float32)
 
         if train == 1:
             self.Wi = self.init_weights(
@@ -163,12 +244,12 @@ class TLSTM(torch.nn.Module):
 
             self.Wo = self.init_weights(
                 self.hidden_dim, fc_dim, name="Fc_Layer_weight", reg=None
-            )
+            )  # tf.contrib.layers.l2_regularizer(scale=0.001)
             self.bo = self.init_bias(fc_dim, name="Fc_Layer_bias")
 
             self.W_softmax = self.init_weights(
                 fc_dim, output_dim, name="Output_Layer_weight", reg=None
-            )
+            )  # tf.contrib.layers.l2_regularizer(scale=0.001)
             self.b_softmax = self.init_bias(output_dim, name="Output_Layer_bias")
 
         else:
@@ -221,272 +302,108 @@ class TLSTM(torch.nn.Module):
             )
             self.b_softmax = self.no_init_bias(output_dim, name="Output_Layer_bias")
 
-    def init_weights(self, input_dim, output_dim, name, std=0.1, reg=None):
-        return nn.Parameter(torch.randn(input_dim, output_dim) * std)
-
-    def init_bias(self, output_dim, name):
-        return nn.Parameter(torch.ones(output_dim))
-
-    def no_init_weights(self, input_dim, output_dim, name):
-        return nn.Parameter(torch.randn(input_dim, output_dim))
-
-    def no_init_bias(self, output_dim, name):
-        return nn.Parameter(torch.ones(output_dim))
-
-    def forward(self, input):
-        return self.get_outputs()
-
     def TLSTM_Unit(self, prev_hidden_memory, concat_input):
-        prev_hidden_state, prev_cell = prev_hidden_memory
+        prev_hidden_state, prev_cell = tf.unstack(prev_hidden_memory)
 
-        batch_size = concat_input.size(0)
-        x = concat_input[:, :, 1:]
-        t = concat_input[:, :, 0:1]
+        batch_size = tf.shape(concat_input)[0]
+        x = tf.slice(concat_input, [0, 1], [batch_size, self.input_dim])
+        t = tf.slice(concat_input, [0, 0], [batch_size, 1])
 
         # Dealing with time irregularity
+
+        # Map elapse time in days or months
         T = self.map_elapse_time(t)
 
-        C_ST = torch.tanh(torch.matmul(prev_cell, self.W_decomp) + self.b_decomp)
-        C_ST_dis = T * C_ST
+        # Decompose the previous cell if there is a elapse time
+        C_ST = tf.nn.tanh(tf.matmul(prev_cell, self.W_decomp) + self.b_decomp)
+        C_ST_dis = tf.multiply(T, C_ST)
+        # if T is 0, then the weight is one
         prev_cell = prev_cell - C_ST + C_ST_dis
 
-        i = torch.sigmoid(
-            torch.matmul(x, self.Wi)
-            + torch.matmul(prev_hidden_state, self.Ui)
-            + self.bi
+        # Input gate
+        i = tf.sigmoid(
+            tf.matmul(x, self.Wi) + tf.matmul(prev_hidden_state, self.Ui) + self.bi
         )
-        f = torch.sigmoid(
-            torch.matmul(x, self.Wf)
-            + torch.matmul(prev_hidden_state, self.Uf)
-            + self.bf
+
+        # Forget Gate
+        f = tf.sigmoid(
+            tf.matmul(x, self.Wf) + tf.matmul(prev_hidden_state, self.Uf) + self.bf
         )
-        o = torch.sigmoid(
-            torch.matmul(x, self.Wog)
-            + torch.matmul(prev_hidden_state, self.Uog)
-            + self.bog
+
+        # Output Gate
+        o = tf.sigmoid(
+            tf.matmul(x, self.Wog) + tf.matmul(prev_hidden_state, self.Uog) + self.bog
         )
-        C = torch.tanh(
-            torch.matmul(x, self.Wc)
-            + torch.matmul(prev_hidden_state, self.Uc)
-            + self.bc
+
+        # Candidate Memory Cell
+        C = tf.nn.tanh(
+            tf.matmul(x, self.Wc) + tf.matmul(prev_hidden_state, self.Uc) + self.bc
         )
+
+        # Current Memory cell
         Ct = f * prev_cell + i * C
-        current_hidden_state = o * torch.tanh(Ct)
 
-        return torch.stack([current_hidden_state, Ct])
+        # Current Hidden state
+        current_hidden_state = o * tf.nn.tanh(Ct)
 
-    def get_states(self):
-        batch_size = self.input.size(0)
-        print("batch_size: ", batch_size)
-        scan_input_ = self.input.permute(2, 0, 1)
-        print("scan_input: ", scan_input_)
-        scan_input = scan_input_.permute(2, 1, 0)
-        scan_time = self.time.permute(1, 0)
-        initial_hidden = torch.zeros(batch_size, self.hidden_dim, dtype=torch.float32)
-        ini_state_cell = torch.stack([initial_hidden, initial_hidden])
-        scan_time = scan_time.unsqueeze(2)
-        concat_input = torch.cat([scan_time, scan_input], 2)
-        packed_hidden_states = torch.scan(self.TLSTM_Unit, concat_input, ini_state_cell)
+        return tf.stack([current_hidden_state, Ct])
+
+    def get_states(self):  # Returns all hidden states for the samples in a batch
+        batch_size = tf.shape(self.input)[0]
+        scan_input_ = tf.transpose(self.input, perm=[2, 0, 1])
+        scan_input = tf.transpose(
+            scan_input_
+        )  # scan input is [seq_length x batch_size x input_dim]
+        scan_time = tf.transpose(self.time)  # scan_time [seq_length x batch_size]
+        initial_hidden = tf.zeros([batch_size, self.hidden_dim], tf.float32)
+        ini_state_cell = tf.stack([initial_hidden, initial_hidden])
+        # make scan_time [seq_length x batch_size x 1]
+        scan_time = tf.reshape(
+            scan_time, [tf.shape(scan_time)[0], tf.shape(scan_time)[1], 1]
+        )
+        concat_input = tf.concat(
+            [scan_time, scan_input], 2
+        )  # [seq_length x batch_size x input_dim+1]
+        packed_hidden_states = tf.scan(
+            self.TLSTM_Unit, concat_input, initializer=ini_state_cell, name="states"
+        )
         all_states = packed_hidden_states[:, 0, :, :]
         return all_states
 
     def get_output(self, state):
-        output = F.relu(torch.matmul(state, self.Wo) + self.bo)
-        output = F.dropout(output, self.keep_prob)
-        output = torch.matmul(output, self.W_softmax) + self.b_softmax
+        output = tf.nn.relu(tf.matmul(state, self.Wo) + self.bo)
+        output = tf.nn.dropout(output, self.keep_prob)
+        output = tf.matmul(output, self.W_softmax) + self.b_softmax
         return output
 
-    def get_outputs(self):
+    def get_outputs(self):  # Returns all the outputs
         all_states = self.get_states()
-        all_outputs = torch.stack([self.get_output(state) for state in all_states])
-        output = all_outputs[-1, :, :]  # Take the last output
+        all_outputs = tf.map_fn(self.get_output, all_states)
+        output = tf.reverse(all_outputs, [0])[
+            0, :, :
+        ]  # Compatible with tensorflow 1.2.1
+        # output = tf.reverse(all_outputs, [True, False, False])[0, :, :] # Compatible with tensorflow 0.12.1
         return output
 
     def get_cost_acc(self):
         logits = self.get_outputs()
-        cross_entropy = nn.CrossEntropyLoss()(logits, torch.argmax(self.labels, dim=1))
-        y_pred = torch.argmax(logits, dim=1)
-        y = torch.argmax(self.labels, dim=1)
+        cross_entropy = tf.math.reduce_mean(
+            tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=logits)
+        )
+        y_pred = tf.math.argmax(logits, 1)
+        y = tf.math.argmax(self.labels, 1)
         return cross_entropy, y_pred, y, logits, self.labels
 
     def map_elapse_time(self, t):
-        c1 = torch.tensor(1, dtype=torch.float32)
-        c2 = torch.tensor(2.7183, dtype=torch.float32)
-        T = c1 / torch.log(t + c2)
-        Ones = torch.ones(1, self.hidden_dim, dtype=torch.float32)
-        T = torch.matmul(T, Ones)
+        c1 = tf.constant(1, dtype=tf.float32)
+        c2 = tf.constant(2.7183, dtype=tf.float32)
+
+        # T = tf.multiply(self.wt, t) + self.bt
+
+        T = tf.math.divide(c1, tf.math.log(t + c2), name="Log_elapse_time")
+
+        Ones = tf.ones([1, self.hidden_dim], dtype=tf.float32)
+
+        T = tf.linalg.matmul(T, Ones)
+
         return T
-
-
-class TLSTMDataModule(LightningDataModule):
-    def __init__(
-        self,
-        input_df,
-        train_batch_size: int = 16,
-        eval_batch_size: int = 16,
-        **kwargs,
-    ):
-        super().__init__()
-        self.input_df = input_df
-        self.train_batch_size = train_batch_size
-        self.eval_batch_size = eval_batch_size
-
-    def setup(self, stage=None):
-        # Calculate the input length directly
-        len_input = len(self.input_df.columns) - 4
-
-        # Group by "idana" and "idcentro" and sort each group by "data"
-        grouped = self.input_df.groupby(["idana", "idcentro"], group_keys=True)
-
-        inputs = []
-        labels = []
-        max_history_len = 0
-
-        for _, group in grouped:
-            patient_history = group.sort_values(by=["data"])
-            labels.append(
-                patient_history["label"].iloc[0]
-            )  # Use iloc to access the first item
-            patient_history = patient_history.drop(
-                columns=["idana", "idcentro", "label", "data"]
-            )
-            nested_list = patient_history.to_numpy(dtype=np.float32)
-            inputs.append(nested_list)
-
-            max_history_len = max(
-                max_history_len, nested_list.shape[0]
-            )  # Update max_history_len
-
-        # Pad sequences using pad_sequence
-        tensor_list = [
-            torch.cat(
-                (
-                    torch.zeros(max_history_len - len(sublist), len_input),
-                    torch.tensor(sublist),
-                )
-            )
-            for sublist in inputs
-        ]
-        padded_tensor = pad_sequence(tensor_list, batch_first=True)
-        padded_tensor = padded_tensor.to(torch.float32)
-
-        bool_tensor = torch.tensor(labels, dtype=torch.float32)
-
-        # Printing unique values in bool_tensor
-        unique_values, value_counts = torch.unique(bool_tensor, return_counts=True)
-        print("Unique values in bool_tensor:")
-        print(unique_values)
-        print("Value counts:")
-        print(value_counts)
-
-        # Create a dataset
-        dataset = TensorDataset(padded_tensor, bool_tensor)
-
-        # split dataset into train and validation sampling randomly
-        # use 20% of training data for validation
-        train_set_size = int(len(dataset) * 0.8)
-        valid_set_size = len(dataset) - train_set_size
-
-        # split the dataset randomly into two
-        self.train_data, self.valid_data = torch.utils.data.random_split(
-            dataset, [train_set_size, valid_set_size], generator=GEN_SEED
-        )
-
-    def train_dataloader(self):
-        return DataLoader(
-            self.train_data,
-            batch_size=self.train_batch_size,
-            shuffle=True,
-            num_workers=8,
-        )
-
-    def val_dataloader(self):
-        return DataLoader(
-            self.valid_data,
-            batch_size=self.eval_batch_size,
-            shuffle=False,
-            num_workers=4,
-        )
-
-    def test_dataloader(self):
-        # placeholder
-        return DataLoader(
-            self.valid_data,
-            batch_size=self.eval_batch_size,
-            shuffle=False,
-            num_workers=4,
-        )
-
-
-# adapted from https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#child-modules
-class LitTLSTM(LightningModule):
-    def __init__(
-        self,
-        tlstm,
-        learning_rate: float = 1e-4,
-        adam_epsilon: float = 1e-8,
-        warmup_steps: int = 0,
-        weight_decay: float = 0.0,
-    ):
-        super().__init__()
-        self.save_hyperparameters(ignore=["tlstm"])
-
-        self.model = tlstm
-        self.metric = torch.nn.CrossEntropyLoss()
-
-    def forward(self, x):
-        return self.model.forward(x)
-
-    def training_step(self, batch, batch_idx):
-        x, _ = batch
-        x_hat = self.model(x)
-        loss = self.metric(x, x_hat)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        self._shared_eval(batch, batch_idx, "val")
-
-    def test_step(self, batch, batch_idx):
-        self._shared_eval(batch, batch_idx, "test")
-
-    def _shared_eval(self, batch, batch_idx, prefix):
-        x, _ = batch
-        x_hat = self.model(x)
-        loss = self.metric(x, x_hat)
-        self.log(f"{prefix}_loss", loss)
-
-    def configure_optimizers(self):
-        """Prepare optimizer and schedule (linear warmup and decay)"""
-        model = self.model
-        no_decay = ["bias", "LayerNorm.weight"]
-        optimizer_grouped_parameters = [
-            {
-                "params": [
-                    p
-                    for n, p in model.named_parameters()
-                    if not any(nd in n for nd in no_decay)
-                ],
-                "weight_decay": self.hparams.weight_decay,
-            },
-            {
-                "params": [
-                    p
-                    for n, p in model.named_parameters()
-                    if any(nd in n for nd in no_decay)
-                ],
-                "weight_decay": 0.0,
-            },
-        ]
-        optimizer = torch.optim.AdamW(
-            optimizer_grouped_parameters,
-            lr=self.hparams.learning_rate,
-            eps=self.hparams.adam_epsilon,
-        )
-
-        # scheduler = get_linear_schedule_with_warmup(
-        #     optimizer,
-        #     num_warmup_steps=self.hparams.warmup_steps,
-        #     num_training_steps=self.trainer.estimated_stepping_batches,
-        # )
-        # scheduler = {"scheduler": scheduler, "interval": "step", "frequency": 1}
-        return [optimizer]  # , [scheduler]
