@@ -6,6 +6,7 @@ test.ipynb
 test.py
 dataset.pkl
 .vscode
+/balanced_data/*
 lightning_logs/
 delta_eta_df
 lstm_df
