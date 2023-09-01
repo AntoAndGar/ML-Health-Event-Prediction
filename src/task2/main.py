@@ -7,12 +7,12 @@ import pickle
 import os
 import re
 import torch
+import random
 
 import Vanilla_LSTM
 
 from datetime import datetime
 from typing import Optional
-
 
 from pytorch_lightning import (
     LightningDataModule,
@@ -20,11 +20,10 @@ from pytorch_lightning import (
     Trainer,
     seed_everything,
 )
-
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from torch.utils.data import DataLoader, random_split
-
+from torch.nn.utils.rnn import pad_sequence
 
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 
@@ -37,8 +36,9 @@ from transformers import (
 )
 
 import TLSTM
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+import tensorflow as tf
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import roc_auc_score
 
 SEED = 0
 rng = np.random.default_rng(SEED)
@@ -49,12 +49,16 @@ MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
-PRESCRIZIONI = True
-BERT_DATASET = False
-CREATE_BERT_DATASET = False
-PARALLEL_LOAD_DATASET = True
-WRITE_DATASET = False
+PRESCRIZIONI: bool = True
+BERT_DATASET: bool = False
+CREATE_BERT_DATASET: bool = False
+PARALLEL_LOAD_DATASET: bool = True
+WRITE_DATASET: bool = False
 DATASET_NAME = "dataset_def.pkl"
+EVALUATE_BERT: bool = False
+
+TRAIN_TLSTM: bool = False
+EVALUATE_TLSTM: bool = False
 
 # VANILLA LSTM PARAMETERS
 VANILLA_LSTM: bool = False
@@ -114,7 +118,6 @@ AMD_OF_CARDIOVASCULAR_EVENT = [
     "AMD208",
     "AMD303",
 ]
-
 
 
 def read_csv(filename):
@@ -181,8 +184,8 @@ del file_names, df_list
 
 print(df_anagrafica.label.value_counts())
 if df_anagrafica.label.unique().size > 2:
-    #print("Error: more than 2 different labels")
-    raise("Error: more than 2 different labels")
+    # print("Error: more than 2 different labels")
+    raise ("Error: more than 2 different labels")
 
 
 df_anagrafica_label_0 = df_anagrafica[df_anagrafica.label == False]
@@ -243,7 +246,7 @@ def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
         df_label_0_last_event["data_right"] - np.timedelta64(6, "M")
     )
 
-    '''
+    """
     df = (
         df_label_0_last_event[temp]
         .drop(columns=["data_right",
@@ -258,7 +261,7 @@ def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
                         "annodecesso"])
         .rename(columns={"data_left": "data"})
     )
-    '''
+    """
     df = df.drop(temp[temp].index)
     return df
 
@@ -453,7 +456,6 @@ elif BALANCING == "standard":
     df_esami_stru = balance(df_esami_stru, 0.50)
     print("After balance: ", len(df_esami_stru))
 
-
     if PRESCRIZIONI:
         print("Before balance: ", len(df_pres_diab_farm))
         df_pres_diab_farm = balance(df_pres_diab_farm, 0.50)
@@ -470,23 +472,43 @@ elif BALANCING == "standard":
 van_val = 0.1
 van_test = 0.3
 van_train = 1 - van_test - van_val
-#TODO: Converti datatime in float
+# TODO: Converti datatime in float
 if VANILLA_LSTM:
     if not LOAD_VANILLA_DF:
-        vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+        vanilla_df = Vanilla_LSTM.create_dataset(
+            df_anagrafica,
+            df_diagnosi,
+            df_esami_lab_par,
+            df_esami_lab_par_cal,
+            df_esami_stru,
+            df_pres_diab_farm,
+            df_pres_diab_no_farm,
+            df_pres_no_diab,
+        )
         if DROP_ANNI:
-            vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
+            vanilla_df = vanilla_df.drop(
+                columns=[
+                    "annonascita",
+                    "annoprimoaccesso",
+                    "annodecesso",
+                    "annodiagnosidiabete",
+                ]
+            )
 
         if SAVE_VANILLA_DF:
             vanilla_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
             print(f"vanilla_df.csv exported")
     else:
         print("loading vanilla data")
+        
         vanilla_df= read_csv("{LSTM_DF}/vanilla_df.csv")
+
         vanilla_df = vanilla_df.fillna(-100)
 
-    len_input = len(vanilla_df.columns)-4 #13
-    vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
+    len_input = len(vanilla_df.columns) - 4  # 13
+    vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(
+        input_size=len_input, hidden_size=512
+    )
     grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
     inputs = []
     labels = []
@@ -498,16 +520,16 @@ if VANILLA_LSTM:
             max_history_len = group.values.shape[0]
 
     k = 2
-    while k*2 < max_history_len:
-        k = k*2
+    while k * 2 < max_history_len:
+        k = k * 2
     altrocount = 0
     print("k max history len: ", k)
     for name, group in grouped_vanilla:
         vanilla_patient_hystory = group.sort_values(by=["data"])
-        labels.append(
-            vanilla_patient_hystory["label"].values[0]
-            )
-        vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
+        labels.append(vanilla_patient_hystory["label"].values[0])
+        vanilla_patient_hystory = vanilla_patient_hystory.drop(
+            columns=["idana", "idcentro", "label", "data"]
+        )
 
         if vanilla_patient_hystory.values.shape[0] > k:
             altrocount += 1
@@ -519,16 +541,18 @@ if VANILLA_LSTM:
         if count >= 50:
             break
     print("altrocount: ", altrocount)
-    from torch.nn.utils.rnn import pad_sequence
 
     tensor_list = [
-        torch.cat((torch.zeros(
-            max_history_len - len(sublist),len_input) - 200.0,
-            torch.tensor(sublist)))
+        torch.cat(
+            (
+                torch.zeros(max_history_len - len(sublist), len_input) - 200.0,
+                torch.tensor(sublist),
+            )
+        )
         for sublist in inputs
-        ]
-    padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
-    #padded_tensor = padded_tensor.to(torch.long)
+    ]
+    padded_tensor = pad_sequence(tensor_list, batch_first=True)  # batch_first=True
+    # padded_tensor = padded_tensor.to(torch.long)
     padded_tensor = padded_tensor.to(torch.float32)
     bool_tensor = torch.tensor(labels, dtype=torch.bool)
     bool_tensor = torch.tensor(labels, dtype=torch.float32)
@@ -544,18 +568,33 @@ if VANILLA_LSTM:
     test_size = len(vanilla_dataset) - train_size - val_size
 
     # Split the dataset into train, validation, and test sets
-    vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
+    vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(
+        vanilla_dataset, [train_size, test_size, val_size]
+    )
 
     # Create DataLoader instances for train, validation, and test sets
     batch_size = 16  # Adjust as needed
-    train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(
+        vanilla_train_dataset, batch_size=batch_size, shuffle=True
+    )
     val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
 
-    vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
-    vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
-    vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-    Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
+    vanilla_train_loader = Vanilla_LSTM.DataLoader(
+        vanilla_train_dataset, batch_size=batch_size, shuffle=True
+    )
+    vanilla_val_loader = Vanilla_LSTM.DataLoader(
+        vanilla_val_dataset, batch_size=batch_size, shuffle=True
+    )
+    vanilla_test_loader = Vanilla_LSTM.DataLoader(
+        vanilla_test_dataset, batch_size=batch_size, shuffle=True
+    )
+    Vanilla_LSTM.evaluate_vanilla_LSTM(
+        vanilla_model,
+        train=vanilla_train_dataset,
+        test=vanilla_test_dataset,
+        val=vanilla_val_loader,
+    )
 #####################
 # PubMedBERT
 #####################
@@ -1127,7 +1166,129 @@ def evaluate_PubMedBERT():
     trainer.fit(model=model, datamodule=dm)
 
     return
-'''
+
+def training_tlstm(
+    data_train_batches,
+    labels_train_batches,
+    elapsed_train_batches,
+    number_train_batches,
+    learning_rate,
+    training_epochs,
+    train_dropout_prob,
+    hidden_dim,
+    fc_dim,
+    key,
+    model_path="./tlstm_dir/tlstm_model",
+):
+    print("Training TLSTM")
+
+    input_dim = data_train_batches[0].shape[2]
+    output_dim = labels_train_batches[0].shape[1]
+
+    lstm = TLSTM.TLSTM(input_dim, output_dim, hidden_dim, fc_dim, key)
+
+    cross_entropy, y_pred, y, logits, labels = lstm.get_cost_acc()
+    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate).minimize(
+        cross_entropy
+    )
+
+    init = tf.compat.v1.global_variables_initializer()
+    saver = tf.compat.v1.train.Saver()
+
+    with tf.compat.v1.Session() as sess:
+        sess.run(init)
+        for epoch in range(training_epochs):  #
+            # Loop over all batches
+            total_cost = 0
+            for i in range(number_train_batches):  #
+                # batch_xs is [number of patients x sequence length x input dimensionality]
+                batch_xs, batch_ys, batch_ts = (
+                    data_train_batches[i],
+                    labels_train_batches[i],
+                    elapsed_train_batches[i],
+                )
+                batch_ts = np.reshape(batch_ts, [batch_ts.shape[0], batch_ts.shape[1]])
+                sess.run(
+                    optimizer,
+                    feed_dict={
+                        lstm.input: batch_xs,
+                        lstm.labels: batch_ys,
+                        lstm.keep_prob: train_dropout_prob,
+                        lstm.time: batch_ts,
+                    },
+                )
+                print(f"Epoch: {epoch + 1} batch: {i}")
+
+        print("Training is over!")
+        saver.save(sess, model_path)
+
+
+def testing_tlstm(
+    data_train_batches,
+    labels_train_batches,
+    elapsed_train_batches,
+    number_train_batches,
+    train_dropout_prob,
+    hidden_dim,
+    fc_dim,
+    key,
+    model_path="./tlstm_dir/tlstm_model",
+):
+    print("Testing TLSTM")
+    input_dim = data_train_batches[0].shape[2]
+    output_dim = labels_train_batches[0].shape[1]
+
+    lstm = TLSTM.TLSTM(input_dim, output_dim, hidden_dim, fc_dim, key)
+
+    tf.compat.v1.disable_eager_execution()
+    sav = tf.compat.v1.train.import_meta_graph(f"{model_path}.meta")
+
+    with tf.compat.v1.Session() as sess:
+        sav.restore(
+            sess, tf.compat.v1.train.latest_checkpoint(f"./{model_path.split('/')[1]}/")
+        )
+
+        Y_pred = []
+        Y_true = []
+        Labels = []
+        Logits = []
+
+        for i in range(number_train_batches):  #
+            batch_xs, batch_ys, batch_ts = (
+                data_train_batches[i],
+                labels_train_batches[i],
+                elapsed_train_batches[i],
+            )
+            batch_ts = np.reshape(batch_ts, [batch_ts.shape[0], batch_ts.shape[1]])
+            c_train, y_pred_train, y_train, logits_train, labels_train = sess.run(
+                lstm.get_cost_acc(),
+                feed_dict={
+                    lstm.input: batch_xs,
+                    lstm.labels: batch_ys,
+                    lstm.keep_prob: train_dropout_prob,
+                    lstm.time: batch_ts,
+                },
+            )
+            print(f"Validation batch: {i}")
+
+            if i > 0:
+                Y_true = np.concatenate([Y_true, y_train], 0)
+                Y_pred = np.concatenate([Y_pred, y_pred_train], 0)
+                Labels = np.concatenate([Labels, labels_train], 0)
+                Logits = np.concatenate([Logits, logits_train], 0)
+            else:
+                Y_true = y_train
+                Y_pred = y_pred_train
+                Labels = labels_train
+                Logits = logits_train
+
+        total_acc = accuracy_score(Y_true, Y_pred)
+        print("Train Accuracy = {:.3f}".format(total_acc))
+        total_auc = roc_auc_score(Labels, Logits, average="micro")
+        print("Train AUC = {:.3f}".format(total_auc))
+        total_auc_macro = roc_auc_score(Labels, Logits, average="macro")
+        print("Train AUC Macro = {:.3f}".format(total_auc_macro))
+
 def evaluate_T_LSTM():
     df = TLSTM.create_dataset(
         df_anagrafica,
@@ -1140,31 +1301,86 @@ def evaluate_T_LSTM():
         df_pres_no_diab,
     )
     print(df.head(2))
-    dm = TLSTM.TLSTMDataModule(df)
-    # dm.setup("fit")
-    # print(next(iter(dm.train_dataloader())))
 
-    tlstm = TLSTM.TLSTM(
-        input_dim=dm.train_batch_size, output_dim=2, hidden_dim=128, fc_dim=64, train=1
-    )
-    model = TLSTM.LitTLSTM(tlstm)
-    # print(tlstm)
-    # print(model)
-    # checkpoint_callback = ModelCheckpoint(monitor="val_f1", mode="max")
+    feature, labels, elapsed_time = TLSTM.create_tensor_dataset(df)
 
-    trainer = Trainer(
-        max_epochs=1,
-        accelerator="auto",
-        devices="auto",
-        #     benchmark=True,
-        precision="16-mixed",
-        #    callbacks=[checkpoint_callback],
+    len_batch = 7
+    num_batch = len(feature) // len_batch
+    print("num_batch: ", num_batch)
+
+    def split_padded(a, n):
+        print(a.shape)
+        padding = (-len(a)) % n
+        if len(a.shape) == 1:
+            return np.array(np.array_split(np.concatenate((a, np.zeros(padding))), n))
+        elif len(a.shape) == 2:
+            return np.array(
+                np.array_split(np.concatenate((a, np.zeros((padding, a.shape[1])))), n)
+            )
+        elif len(a.shape) == 3:
+            return np.array(
+                np.array_split(
+                    np.concatenate((a, np.zeros((padding, a.shape[1], a.shape[2])))), n
+                )
+            )
+        else:
+            raise ValueError("The input array must be 1D, 2D or 3D")
+
+    train_data_batches = split_padded(feature, num_batch)
+    labels_train_batches = split_padded(labels, num_batch)
+    elapsed_train_batches = split_padded(elapsed_time, num_batch)
+    print("train_data_batches: ", train_data_batches.shape)
+
+    learning_rate = 1e-3
+    training_epochs = 1
+    dropout_prob = 1.0
+    hidden_dim = 128
+    fc_dim = 64
+    training_mode = 1
+
+    if TRAIN_TLSTM:
+        training_tlstm(
+            train_data_batches,
+            labels_train_batches,
+            elapsed_train_batches,
+            num_batch,
+            learning_rate,
+            training_epochs,
+            dropout_prob,
+            hidden_dim,
+            fc_dim,
+            training_mode,
+        )
+
+    # TODO: fix this because overlapping train and test data
+    len_val_batch = 63
+    num_val_batch = len(feature) // len_val_batch
+    num_batch_to_select = 300
+    val_data_batches = split_padded(feature, num_val_batch)[:num_batch_to_select]
+    labels_val_batches = split_padded(labels, num_val_batch)[:num_batch_to_select]
+    elapsed_val_batches = split_padded(elapsed_time, num_val_batch)[
+        :num_batch_to_select
+    ]
+    print("val_data_batches: ", val_data_batches.shape)
+
+    testing_tlstm(
+        val_data_batches,
+        labels_val_batches,
+        elapsed_val_batches,
+        num_batch_to_select,
+        dropout_prob,
+        hidden_dim,
+        fc_dim,
+        training_mode,
     )
-    trainer.fit(model=model, datamodule=dm)
+
     return
-'''
-#evaluate_T_LSTM()
-# evaluate_PubMedBERT()
+
+if EVALUATE_TLSTM:
+    evaluate_T_LSTM()
+if EVALUATE_BERT:
+    evaluate_PubMedBERT()
+
 
 
 import sys,time,random
@@ -1181,43 +1397,20 @@ if TIME_LSTM:
         tlsmt_df = read_csv(f"{LSTM_DF}/vanilla_df.csv")
         tlsmt_df = tlsmt_df.fillna(-100)
     else:
-        tlsmt_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
+        vanilla_df = Vanilla_LSTM.create_dataset(
+            df_anagrafica,
+            df_diagnosi,
+            df_esami_lab_par,
+            df_esami_lab_par_cal,
+            df_esami_stru,
+            df_pres_diab_farm,
+            df_pres_diab_no_farm,
+            df_pres_no_diab,
+        )
         if SAVE_TIME_DF:
             tlsmt_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
             print(f"vanilla_df.csv exported")
-
-    tlsmt_df['data']=tlsmt_df['data'].astype(str).replace({'-':''}, regex=True)
-
-    X_columns = [col for col in tlsmt_df if col not in ['idcentro', 'idana','label','data']]
-    T_columns = [col for col in tlsmt_df if col in ['data']]
-    y_columns = ['label']
-
-    grouped_events = tlsmt_df.groupby(['idana', 'idcentro'])
-    i=1
-    data_train_batches=list()
-    labels_train_batches=list()
-    elapsed_train_batches=list()
-    number_train_batches=0
-    for it, (ids, features) in enumerate(grouped_events):
-        #batch = features[features['id']==ids].sort_values(['data'])
-        X = features[X_columns]
-        X=np.resize(X, (X.shape[0],1,X.shape[1]))
-        Z = features[T_columns]
-        data_train_batches.append(X)
-        labels_train_batches.append(features[y_columns])
-        elapsed_train_batches.append(Z)
-        number_train_batches+=1
-        progressBar(number_train_batches,len(grouped_events))
-        if number_train_batches > 2000:
-            break
-    
-    learning_rate = 0.01
-    training_epochs = 1 #50
-    dropout_prob = 0.5
-    hidden_dim = 1
-    fc_dim = 1
-    TLSTM.training(learning_rate, training_epochs, dropout_prob, hidden_dim, fc_dim, data_train_batches, labels_train_batches, elapsed_train_batches, number_train_batches)
-#    training(learning_rate, training_epochs, dropout_prob, hidden_dim, fc_dim)
+    vanilla_df["data"] = vanilla_df["data"].astype(str).replace({"-": ""}, regex=True)
 
 
 #####################
@@ -1375,6 +1568,7 @@ if DELTA_ETA:
         vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
         vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
         Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
+
 
 
 ############################
