@@ -253,6 +253,54 @@ class TLSTM(object):
             self.b_softmax = self.init_bias(output_dim, name="Output_Layer_bias")
 
         else:
+            self.Wi = self.no_init_weights(
+                self.input_dim, self.hidden_dim, name="Input_Hidden_weight"
+            )
+            self.Ui = self.no_init_weights(
+                self.hidden_dim, self.hidden_dim, name="Input_State_weight"
+            )
+            self.bi = self.no_init_bias(self.hidden_dim, name="Input_Hidden_bias")
+
+            self.Wf = self.no_init_weights(
+                self.input_dim, self.hidden_dim, name="Forget_Hidden_weight"
+            )
+            self.Uf = self.no_init_weights(
+                self.hidden_dim, self.hidden_dim, name="Forget_State_weight"
+            )
+            self.bf = self.no_init_bias(self.hidden_dim, name="Forget_Hidden_bias")
+
+            self.Wog = self.no_init_weights(
+                self.input_dim, self.hidden_dim, name="Output_Hidden_weight"
+            )
+            self.Uog = self.no_init_weights(
+                self.hidden_dim, self.hidden_dim, name="Output_State_weight"
+            )
+            self.bog = self.no_init_bias(self.hidden_dim, name="Output_Hidden_bias")
+
+            self.Wc = self.no_init_weights(
+                self.input_dim, self.hidden_dim, name="Cell_Hidden_weight"
+            )
+            self.Uc = self.no_init_weights(
+                self.hidden_dim, self.hidden_dim, name="Cell_State_weight"
+            )
+            self.bc = self.no_init_bias(self.hidden_dim, name="Cell_Hidden_bias")
+
+            self.W_decomp = self.no_init_weights(
+                self.hidden_dim, self.hidden_dim, name="Decomposition_Hidden_weight"
+            )
+            self.b_decomp = self.no_init_bias(
+                self.hidden_dim, name="Decomposition_Hidden_bias_enc"
+            )
+
+            self.Wo = self.no_init_weights(
+                self.hidden_dim, fc_dim, name="Fc_Layer_weight"
+            )
+            self.bo = self.no_init_bias(fc_dim, name="Fc_Layer_bias")
+
+            self.W_softmax = self.no_init_weights(
+                fc_dim, output_dim, name="Output_Layer_weight"
+            )
+            self.b_softmax = self.no_init_bias(output_dim, name="Output_Layer_bias")
 
     def TLSTM_Unit(self, prev_hidden_memory, concat_input):
         prev_hidden_state, prev_cell = tf.unstack(prev_hidden_memory)
@@ -324,7 +372,6 @@ class TLSTM(object):
         all_states = packed_hidden_states[:, 0, :, :]
         return all_states
 
-
     def get_output(self, state):
         output = tf.nn.relu(tf.matmul(state, self.Wo) + self.bo)
         output = tf.nn.dropout(output, self.keep_prob)
@@ -348,7 +395,6 @@ class TLSTM(object):
         y_pred = tf.math.argmax(logits, 1)
         y = tf.math.argmax(self.labels, 1)
         return cross_entropy, y_pred, y, logits, self.labels
-
 
     def map_elapse_time(self, t):
         c1 = tf.constant(1, dtype=tf.float32)
