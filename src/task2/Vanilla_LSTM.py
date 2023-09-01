@@ -125,10 +125,7 @@ def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=5):
         print("Total: ", total)
         print("Wrong: ", wrong)
         print('Accuracy of the network on the test data: {} %'.format(100 * correct / total))
-    return 
-
-    # why lose time using keras or tensorflow ?
-    # when we can use pytorch (pytorch lightning I mean, but also pytorch is ok)
+    return
 
 def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab, delta=False):
     df_esami_par['tipo'] = 'esame'
