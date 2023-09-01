@@ -101,7 +101,7 @@ def evaluate_vanilla_LSTM(model, train, test, val, max_epochs=5):
         max = -10
         for input_i, label_i in test:
             output = model(input_i)#[-1]
-            print(output, label_i)
+            #print(output, label_i)
             if output >= max:
                 max = output
             if output <= min:
@@ -145,7 +145,10 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     df_diagnosi['extra'] = ''
     final_df = pd.concat([df_esami_par, df_esami_par_cal, df_esami_stru, df_pre_diab_farm, df_pre_diab_no_farm, df_pre_no_diab, df_diagnosi])
     final_df = final_df.merge(df_anagrafica, on=['idana', 'idcentro'], how='inner')
-    final_df.sort_values(by=['data'])
+    if delta:
+        final_df.sort_values(by=['delta_data'])
+    else:
+        final_df.sort_values(by=['data'])
     final_df['sesso'] = final_df['sesso'].replace('M', 0)
     final_df['sesso'] = final_df['sesso'].replace('F', 1)
 
@@ -177,14 +180,16 @@ def create_dataset(df_anagrafica, df_diagnosi, df_esami_par, df_esami_par_cal, d
     final_df['valore'] = pd.to_numeric(final_df['valore'], errors='coerce')
 
     # Convert datatime of year to float or int [it's the same]
+    #final_df.drop(columns=['annonascita', 'annodecesso', 'annodiagnosidiabete', 'annoprimoaccesso'], inplace=True)
+    '''
+    final_df['annonascita'] = final_df['annonascita'].dt.year  
     if not delta:
         final_df['annodecesso'] = final_df['annodecesso'].dt.year
         final_df['annodiagnosidiabete'] = final_df['annodiagnosidiabete'].dt.year
         final_df['annoprimoaccesso'] = final_df['annoprimoaccesso'].dt.year
-        final_df['annonascita'] = final_df['annonascita'].dt.year  
-
+    '''
     final_df = final_df.fillna(-100)
-    print("Dtypes: \t", final_df.dtypes)
+    print("Dtypes: \n", final_df.dtypes)
 
     return final_df
 
