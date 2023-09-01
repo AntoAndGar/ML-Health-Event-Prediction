@@ -8,3 +8,4 @@ dataset.pkl
 .vscode
 lightning_logs/
 delta_eta_df
+lstm_df

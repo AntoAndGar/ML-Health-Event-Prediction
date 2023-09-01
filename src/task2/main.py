@@ -60,7 +60,7 @@ DATASET_NAME = "dataset_def.pkl"
 VANILLA_LSTM: bool = False
 LOAD_VANILLA_DF: bool = False
 SAVE_VANILLA_DF: bool = True
-DROP_ANNI: bool = False
+DROP_ANNI: bool = True
 LSTM_DF = "lstm_df"
 
 # TIME LSTM PARAMETERS
@@ -70,11 +70,11 @@ SAVE_TIME_DF: bool = False
 
 # DELTA_ETA PARAMETERS
 DELTA_ETA: bool = True
-WRITE_DELTA_ETA_DF: bool = True
+WRITE_DELTA_ETA_DF: bool = False
 DELTA_ETA_PATH = "delta_eta_df"
 
 # DELTA VANILLA LSTM PARAMETERS
-DELTA_VANILLA_LSTM: bool = False
+DELTA_VANILLA_LSTM: bool = True
 LOAD_DELTA_VANILLA_DF: bool = False
 SAVE_DELTA_VANILLA_DF: bool = True
 DELTA_LSTM_DF = "lstm_df"
@@ -474,8 +474,6 @@ van_train = 1 - van_test - van_val
 if VANILLA_LSTM:
     if not LOAD_VANILLA_DF:
         vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab) 
-        if DROP_ANNI:
-            vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
 
         if SAVE_VANILLA_DF:
             vanilla_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
@@ -484,6 +482,9 @@ if VANILLA_LSTM:
         print("loading vanilla data")
         vanilla_df= read_csv("{LSTM_DF}/vanilla_df.csv")
         vanilla_df = vanilla_df.fillna(-100)
+    
+    if DROP_ANNI:
+        vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
 
     len_input = len(vanilla_df.columns)-4 #13
     vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
@@ -1201,16 +1202,19 @@ if TIME_LSTM:
     for it, (ids, features) in enumerate(grouped_events):
         #batch = features[features['id']==ids].sort_values(['data'])
         X = features[X_columns]
+        print(features['label'])
+        print(features['label'].mean())
+
         X=np.resize(X, (X.shape[0],1,X.shape[1]))
         Z = features[T_columns]
         data_train_batches.append(X)
-        labels_train_batches.append(features[y_columns])
+        labels_train_batches.append([features['label'].mean()])
         elapsed_train_batches.append(Z)
         number_train_batches+=1
         progressBar(number_train_batches,len(grouped_events))
-        if number_train_batches > 2000:
+        if number_train_batches > 150:
             break
-    
+
     learning_rate = 0.01
     training_epochs = 1 #50
     dropout_prob = 0.5
@@ -1236,37 +1240,37 @@ if DELTA_ETA:
     df_anagrafica['delta_annoprimoaccesso'] = (df_anagrafica['annoprimoaccesso'] - df_anagrafica['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
     df_anagrafica['delta_annodiagnosidiabete'] = (df_anagrafica['annodiagnosidiabete'] - df_anagrafica['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_anagrafica.drop(columns=['eta', 'annoprimoacceso', 'annodiasiagnosidiabete', 'annodecesso'], inplace=True)
+    df_anagrafica.drop(columns=['eta', 'annoprimoaccesso', 'annodiagnosidiabete', 'annodecesso'], inplace=True)
 
-    df_diagnosi.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_diagnosi = df_diagnosi.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_diagnosi['delta_data'] = (df_diagnosi['data'] - df_diagnosi['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_esami_lab_par.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_esami_lab_par = df_esami_lab_par = df_esami_lab_par.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_esami_lab_par['delta_data'] = (df_esami_lab_par['data'] - df_esami_lab_par['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_esami_lab_par_cal.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_esami_lab_par_cal = df_esami_lab_par_cal.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_esami_lab_par_cal['delta_data'] = (df_esami_lab_par_cal['data'] - df_esami_lab_par_cal['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_esami_stru.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_esami_stru = df_esami_stru.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_esami_stru['delta_data'] = (df_esami_stru['data'] - df_esami_stru['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_pres_diab_farm.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_pres_diab_farm = df_pres_diab_farm.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_pres_diab_farm['delta_data'] = (df_pres_diab_farm['data'] - df_pres_diab_farm['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_pres_diab_no_farm.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_pres_diab_no_farm = df_pres_diab_no_farm.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_pres_diab_no_farm['delta_data'] = (df_pres_diab_no_farm['data'] - df_pres_diab_no_farm['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
-    df_pres_no_diab.merge(df_anagrafica['idcentro', 'idana', 'annonascita'], on=['idcentro', 'idana'], how='left')
+    df_pres_no_diab = df_pres_no_diab.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
     df_pres_no_diab['delta_data'] = (df_pres_no_diab['data'] - df_pres_no_diab['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
 
     #df_anagrafica.drop(columns=['annonascita'], inplace=True)
-    df_diagnosi.drop(columns=['annonascita'], inplace=True)
-    df_esami_lab_par.drop(columns=['annonascita'], inplace=True)
-    df_esami_lab_par_cal.drop(columns=['annonascita'], inplace=True)
-    df_esami_stru.drop(columns=['annonascita'], inplace=True)
-    df_pres_diab_farm.drop(columns=['annonascita'], inplace=True)
-    df_pres_diab_no_farm.drop(columns=['annonascita'], inplace=True)
-    df_pres_no_diab.drop(columns=['annonascita'], inplace=True)
+    df_diagnosi.drop(columns=['annonascita', 'data'], inplace=True)
+    df_esami_lab_par.drop(columns=['annonascita', 'data'], inplace=True)
+    df_esami_lab_par_cal.drop(columns=['annonascita', 'data'], inplace=True)
+    df_esami_stru.drop(columns=['annonascita', 'data'], inplace=True)
+    df_pres_diab_farm.drop(columns=['annonascita', 'data'], inplace=True)
+    df_pres_diab_no_farm.drop(columns=['annonascita', 'data'], inplace=True)
+    df_pres_no_diab.drop(columns=['annonascita', 'data'], inplace=True)
 
     if WRITE_DELTA_ETA_DF:
         df_anagrafica.to_csv(f"{DELTA_ETA_PATH}/df_anagrafica_delta.csv", index=False)
@@ -1297,12 +1301,14 @@ if DELTA_ETA:
         if not LOAD_DELTA_VANILLA_DF:
             vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab, delta=True) 
             if SAVE_DELTA_VANILLA_DF:
-                vanilla_df.to_csv(f"{DELTA_LSTM_DF}/vanilla_df.csv", index=False)
+                vanilla_df.to_csv(f"{DELTA_LSTM_DF}/vanilla_df_d.csv", index=False)
                 print(f"vanilla_df.csv exported")
         else:
             print("loading vanilla data")
-            vanilla_df= read_csv("{DELTA_LSTM_DF}/vanilla_df.csv")
+            vanilla_df= read_csv("{DELTA_LSTM_DF}/vanilla_df_d.csv")
             vanilla_df = vanilla_df.fillna(-100)
+        if DROP_ANNI:
+            vanilla_df = vanilla_df.drop(columns=["annonascita", "delta_annoprimoaccesso", "delta_decesso", "delta_annodiagnosidiabete"])
 
         len_input = len(vanilla_df.columns)-3
         vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
@@ -1322,19 +1328,20 @@ if DELTA_ETA:
         altrocount = 0
         print("k max history len: ", k)
         for name, group in grouped_vanilla:
-            vanilla_patient_hystory = group.sort_values(by=["data"])
+            vanilla_patient_hystory = group.sort_values(by=["delta_data"])
             labels.append(
                 vanilla_patient_hystory["label"].values[0]
                 )
-            vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label", "data"])
+            vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
 
             if vanilla_patient_hystory.values.shape[0] > k:
                 altrocount += 1
                 inputs.append(vanilla_patient_hystory.values[k:])
             else:
                 inputs.append(vanilla_patient_hystory.values)
-            continue
             count += 1
+            progressBar(count,len(grouped_vanilla))
+            continue
             if count >= 50:
                 break
         print("altrocount: ", altrocount)
@@ -1375,7 +1382,7 @@ if DELTA_ETA:
         vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
         vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
         Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
-
+        torch.save(vanilla_model.state_dict(), 'delta_vanilla_lstm')
 
 ############################
 ### Advanced Unbalancing ###
