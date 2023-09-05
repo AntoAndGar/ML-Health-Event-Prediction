@@ -1,9 +1,12 @@
 import concurrent.futures
 import multiprocessing
+import model
 import numpy as np
 import pandas as pd
 import re
 import torch
+
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 PRESCRIZIONI = True
 READ_DATA_PATH = "balanced_data"
@@ -73,7 +76,7 @@ df_pres_diab_farm = df_pres_diab_farm.drop(columns="data")
 df_pres_diab_no_farm = df_pres_diab_no_farm.drop(columns="data")
 df_pres_no_diab = df_pres_no_diab.drop(columns="data")
 
-# Preparing data for the model
+# Now we are going to prepare data for the model
 all_events_concat = pd.concat(
     objs=(
         df_diagnosi,
@@ -85,6 +88,8 @@ all_events_concat = pd.concat(
 )
 
 final_df = df_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
+
+final_df = final_df[:100]
 
 # First we delete "idana" and "idcentro" as they don't give informations to the model
 final_df = final_df.drop(columns=["idana", "idcentro"])
@@ -129,6 +134,67 @@ final_df["codiceatc"] = final_df["codiceatc"].replace(atc_codes, np.arange(float
 drug_description = final_df["descrizionefarmaco"].value_counts().index
 final_df["descrizionefarmaco"] = final_df["descrizionefarmaco"].replace(drug_description, np.arange(float(len(drug_description))))
 
-# Finally we convert boolean label into numeric value
+# We convert boolean label into numeric value
 final_df["label"] = final_df["label"].replace([False, True], [0.0, 1.0])
 
+# And we replace all the remaining NaN values with the value -100 in order to be ignored by the model
+final_df = final_df.fillna(-100)
+
+# Reordering feature labels
+final_df = final_df.reindex(columns=["sesso", "annodiagnosidiabete", "annoprimoaccesso", "annodecesso", "data", 
+                                     "codiceamd", "valore", "codicestitch", "codiceatc", "quantita", "idpasto",
+                                     "descrizionefarmaco", "label"])
+
+data = final_df.drop('label',axis=1).values
+labels = final_df['label'].values
+
+# Create tensor dataset
+dataset = TensorDataset(torch.FloatTensor(data),torch.LongTensor(labels))
+
+# Split between train and test dataset
+train_size = 0.8
+test_size = 0.2
+batch_size = 4
+
+train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+
+data_loader = DataLoader(train_dataset, batch_size)
+
+# Training step
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+input_size = 13
+hidden_size = 32
+num_layers = 1
+num_classes = 2
+
+model = model.Model(input_size, hidden_size, num_layers, num_classes)
+
+criterion = torch.nn.CrossEntropyLoss()
+
+learning_rate = 0.1
+
+optimizer = torch.optim.Adam(model.parameters(), learning_rate)
+
+num_epochs = 1
+
+def train(num_epochs, data_loader, device, criterion, optimizer):
+    for epoch in range(num_epochs):
+        for i, (inputs, labels) in enumerate(data_loader):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            optimizer.zero_grad()
+
+            outputs = model(inputs)
+
+            loss = criterion(outputs, labels)
+            loss.backward()
+
+            optimizer.step()
+
+            if (i+1) % 10 == 0:
+                print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
+                    .format(epoch+1, num_epochs, i+1, len(dataset)//4, loss.item()))
+                
+train(num_epochs, data_loader, device, criterion, optimizer)

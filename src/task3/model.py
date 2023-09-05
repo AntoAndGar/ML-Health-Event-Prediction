@@ -1,5 +1,7 @@
 import torch
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class Model(torch.nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(Model, self).__init__()
