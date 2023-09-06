@@ -83,6 +83,9 @@ LOAD_DELTA_VANILLA_DF: bool = False
 SAVE_DELTA_VANILLA_DF: bool = True
 DELTA_LSTM_DF = "lstm_df"
 
+WRITE_CSV: bool = False
+WRITE_DATA_PATH = "balanced_data"
+
 BALANCING = "standard"
 
 if PRESCRIZIONI:
@@ -468,6 +471,23 @@ elif BALANCING == "standard":
         print("Before balance: ", len(df_pres_no_diab))
         df_pres_no_diab = balance(df_pres_no_diab, 0.50)
         print("After balance: ", len(df_pres_no_diab))
+    if WRITE_CSV:
+        print("Exporting the cleaned datasets...")
+        dict_file_names = {
+            f"anagraficapazientiattivi_b{'_pres' if PRESCRIZIONI else ''}": df_anagrafica,
+            f"diagnosi_b{'_pres' if PRESCRIZIONI else ''}": df_diagnosi,
+            f"esamilaboratorioparametri_b{'_pres' if PRESCRIZIONI else ''}": df_esami_lab_par,
+            f"esamilaboratorioparametricalcolati_b{'_pres' if PRESCRIZIONI else ''}": df_esami_lab_par_cal,
+            f"esamistrumentali_b{'_pres' if PRESCRIZIONI else ''}": df_esami_stru,
+            f"prescrizionidiabetefarmaci_b{'_pres' if PRESCRIZIONI else ''}": df_pres_diab_farm,
+            f"prescrizionidiabetenonfarmaci_b{'_pres' if PRESCRIZIONI else ''}": df_pres_diab_no_farm,
+            f"prescrizioninondiabete_b{'_pres' if PRESCRIZIONI else ''}": df_pres_no_diab,
+        }
+
+        for i, (df_name, df) in enumerate(dict_file_names.items()):
+            df.to_csv(f"{WRITE_DATA_PATH}/{df_name}.csv", index=False)
+            print(f"{df_name}.csv exported ({i+1}/{len(dict_file_names)})")
+        print("Exporting completed!")
 
 import sys,time,random
 def progressBar(count_value, total, suffix=''):
@@ -477,7 +497,7 @@ def progressBar(count_value, total, suffix=''):
     bar = '=' * filled_up_Length + '-' * (bar_length - filled_up_Length)
     sys.stdout.write('[%s] %s%s ...%s\r' %(bar, percentage, '%', suffix))
     sys.stdout.flush()
-    
+
 van_val = 0.1
 van_test = 0.3
 van_train = 1 - van_test - van_val
@@ -499,13 +519,20 @@ if VANILLA_LSTM:
             print(f"vanilla_df.csv exported")
     else:
         print("loading vanilla data")
-        
-        vanilla_df= read_csv("{LSTM_DF}/vanilla_df.csv")
+
+        vanilla_df = read_csv("{LSTM_DF}/vanilla_df.csv")
 
         vanilla_df = vanilla_df.fillna(-100)
-    
+
     if DROP_ANNI:
-        vanilla_df = vanilla_df.drop(columns=["annonascita", "annoprimoaccesso", "annodecesso", "annodiagnosidiabete"])
+        vanilla_df = vanilla_df.drop(
+            columns=[
+                "annonascita",
+                "annoprimoaccesso",
+                "annodecesso",
+                "annodiagnosidiabete",
+            ]
+        )
 
     len_input = len(vanilla_df.columns) - 4  # 13
     vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(
@@ -1175,6 +1202,7 @@ def evaluate_PubMedBERT():
 
     return
 
+
 def training_tlstm(
     data_train_batches,
     labels_train_batches,
@@ -1297,6 +1325,7 @@ def testing_tlstm(
         total_auc_macro = roc_auc_score(Labels, Logits, average="macro")
         print("Train AUC Macro = {:.3f}".format(total_auc_macro))
 
+
 def evaluate_T_LSTM():
     df = TLSTM.create_dataset(
         df_anagrafica,
@@ -1384,6 +1413,7 @@ def evaluate_T_LSTM():
 
     return
 
+
 if EVALUATE_TLSTM:
     evaluate_T_LSTM()
 if EVALUATE_BERT:
@@ -1416,48 +1446,124 @@ if TIME_LSTM:
 #####################
 
 if DELTA_ETA:
-    df_anagrafica['eta'] =  (df_anagrafica["annodecesso"].fillna(pd.Timestamp.now()) - df_anagrafica['annonascita']) # /np.timedelta64(1, 'Y')
-    print(df_anagrafica['eta'].max())
-    # TODO: PARAMETRICE THIS 
+    df_anagrafica["eta"] = (
+        df_anagrafica["annodecesso"].fillna(pd.Timestamp.now())
+        - df_anagrafica["annonascita"]
+    )  # /np.timedelta64(1, 'Y')
+    print(df_anagrafica["eta"].max())
+    # TODO: PARAMETRICE THIS
     MAXIMUM_AGE_FACTOR = 1.05
-    maximum_age_days = (df_anagrafica['eta'].max()/np.timedelta64(1, 'D')) * MAXIMUM_AGE_FACTOR
-    maximum_age_years = (df_anagrafica['eta'].max()/np.timedelta64(1, 'Y')) * MAXIMUM_AGE_FACTOR
-    df_anagrafica['delta_decesso'] = df_anagrafica['eta']/np.timedelta64(1, 'Y') / maximum_age_years
-    df_anagrafica.loc[df_anagrafica['annodecesso'].isnull(), 'delta_decesso'] = np.nan
-    df_anagrafica['delta_annoprimoaccesso'] = (df_anagrafica['annoprimoaccesso'] - df_anagrafica['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
-    df_anagrafica['delta_annodiagnosidiabete'] = (df_anagrafica['annodiagnosidiabete'] - df_anagrafica['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    maximum_age_days = (
+        df_anagrafica["eta"].max() / np.timedelta64(1, "D")
+    ) * MAXIMUM_AGE_FACTOR
+    maximum_age_years = (
+        df_anagrafica["eta"].max() / np.timedelta64(1, "Y")
+    ) * MAXIMUM_AGE_FACTOR
+    df_anagrafica["delta_decesso"] = (
+        df_anagrafica["eta"] / np.timedelta64(1, "Y") / maximum_age_years
+    )
+    df_anagrafica.loc[df_anagrafica["annodecesso"].isnull(), "delta_decesso"] = np.nan
+    df_anagrafica["delta_annoprimoaccesso"] = (
+        (df_anagrafica["annoprimoaccesso"] - df_anagrafica["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
+    df_anagrafica["delta_annodiagnosidiabete"] = (
+        (df_anagrafica["annodiagnosidiabete"] - df_anagrafica["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_anagrafica.drop(columns=['eta', 'annoprimoaccesso', 'annodiagnosidiabete', 'annodecesso'], inplace=True)
+    df_anagrafica.drop(
+        columns=["eta", "annoprimoaccesso", "annodiagnosidiabete", "annodecesso"],
+        inplace=True,
+    )
 
-    df_diagnosi = df_diagnosi.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_diagnosi['delta_data'] = (df_diagnosi['data'] - df_diagnosi['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_diagnosi = df_diagnosi.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_diagnosi["delta_data"] = (
+        (df_diagnosi["data"] - df_diagnosi["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_esami_lab_par = df_esami_lab_par = df_esami_lab_par.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_esami_lab_par['delta_data'] = (df_esami_lab_par['data'] - df_esami_lab_par['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_esami_lab_par = df_esami_lab_par = df_esami_lab_par.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_esami_lab_par["delta_data"] = (
+        (df_esami_lab_par["data"] - df_esami_lab_par["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_esami_lab_par_cal = df_esami_lab_par_cal.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_esami_lab_par_cal['delta_data'] = (df_esami_lab_par_cal['data'] - df_esami_lab_par_cal['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_esami_lab_par_cal = df_esami_lab_par_cal.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_esami_lab_par_cal["delta_data"] = (
+        (df_esami_lab_par_cal["data"] - df_esami_lab_par_cal["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_esami_stru = df_esami_stru.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_esami_stru['delta_data'] = (df_esami_stru['data'] - df_esami_stru['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_esami_stru = df_esami_stru.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_esami_stru["delta_data"] = (
+        (df_esami_stru["data"] - df_esami_stru["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_pres_diab_farm = df_pres_diab_farm.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_pres_diab_farm['delta_data'] = (df_pres_diab_farm['data'] - df_pres_diab_farm['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_pres_diab_farm = df_pres_diab_farm.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_pres_diab_farm["delta_data"] = (
+        (df_pres_diab_farm["data"] - df_pres_diab_farm["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_pres_diab_no_farm = df_pres_diab_no_farm.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_pres_diab_no_farm['delta_data'] = (df_pres_diab_no_farm['data'] - df_pres_diab_no_farm['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_pres_diab_no_farm = df_pres_diab_no_farm.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_pres_diab_no_farm["delta_data"] = (
+        (df_pres_diab_no_farm["data"] - df_pres_diab_no_farm["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    df_pres_no_diab = df_pres_no_diab.merge(df_anagrafica[['idcentro', 'idana', 'annonascita']], on=['idcentro', 'idana'], how='left')
-    df_pres_no_diab['delta_data'] = (df_pres_no_diab['data'] - df_pres_no_diab['annonascita'])/np.timedelta64(1, 'Y')/maximum_age_years
+    df_pres_no_diab = df_pres_no_diab.merge(
+        df_anagrafica[["idcentro", "idana", "annonascita"]],
+        on=["idcentro", "idana"],
+        how="left",
+    )
+    df_pres_no_diab["delta_data"] = (
+        (df_pres_no_diab["data"] - df_pres_no_diab["annonascita"])
+        / np.timedelta64(1, "Y")
+        / maximum_age_years
+    )
 
-    #df_anagrafica.drop(columns=['annonascita'], inplace=True)
-    df_diagnosi.drop(columns=['annonascita', 'data'], inplace=True)
-    df_esami_lab_par.drop(columns=['annonascita', 'data'], inplace=True)
-    df_esami_lab_par_cal.drop(columns=['annonascita', 'data'], inplace=True)
-    df_esami_stru.drop(columns=['annonascita', 'data'], inplace=True)
-    df_pres_diab_farm.drop(columns=['annonascita', 'data'], inplace=True)
-    df_pres_diab_no_farm.drop(columns=['annonascita', 'data'], inplace=True)
-    df_pres_no_diab.drop(columns=['annonascita', 'data'], inplace=True)
+    # df_anagrafica.drop(columns=['annonascita'], inplace=True)
+    df_diagnosi.drop(columns=["annonascita", "data"], inplace=True)
+    df_esami_lab_par.drop(columns=["annonascita", "data"], inplace=True)
+    df_esami_lab_par_cal.drop(columns=["annonascita", "data"], inplace=True)
+    df_esami_stru.drop(columns=["annonascita", "data"], inplace=True)
+    df_pres_diab_farm.drop(columns=["annonascita", "data"], inplace=True)
+    df_pres_diab_no_farm.drop(columns=["annonascita", "data"], inplace=True)
+    df_pres_no_diab.drop(columns=["annonascita", "data"], inplace=True)
 
     if WRITE_DELTA_ETA_DF:
         df_anagrafica.to_csv(f"{DELTA_ETA_PATH}/df_anagrafica_delta.csv", index=False)
@@ -1466,39 +1572,68 @@ if DELTA_ETA:
         df_diagnosi.to_csv(f"{DELTA_ETA_PATH}/df_diagnosi_delta.csv", index=False)
         print(f"{DELTA_ETA_PATH}/df_diagnosi_delta.csv exported")
 
-        df_esami_lab_par.to_csv(f"{DELTA_ETA_PATH}/df_esami_lab_par_delta.csv", index=False)
+        df_esami_lab_par.to_csv(
+            f"{DELTA_ETA_PATH}/df_esami_lab_par_delta.csv", index=False
+        )
         print(f"{DELTA_ETA_PATH}/df_esami_lab_par_delta.csv exported")
 
-        df_esami_lab_par_cal.to_csv(f"{DELTA_ETA_PATH}/df_esami_lab_par_cal_delta.csv", index=False)
+        df_esami_lab_par_cal.to_csv(
+            f"{DELTA_ETA_PATH}/df_esami_lab_par_cal_delta.csv", index=False
+        )
         print(f"{DELTA_ETA_PATH}/df_esami_lab_par_cal_delta.csv exported")
 
         df_esami_stru.to_csv(f"{DELTA_ETA_PATH}/df_esami_stru_delta.csv", index=False)
         print(f"{DELTA_ETA_PATH}/df_esami_stru_delta.csv exported")
 
-        df_pres_diab_farm.to_csv(f"{DELTA_ETA_PATH}/df_pres_diab_farm_delta.csv", index=False)
+        df_pres_diab_farm.to_csv(
+            f"{DELTA_ETA_PATH}/df_pres_diab_farm_delta.csv", index=False
+        )
         print(f"{DELTA_ETA_PATH}/df_pres_diab_farm_delta.csv exported")
 
-        df_pres_diab_no_farm.to_csv(f"{DELTA_ETA_PATH}/df_pres_diab_no_farm_delta.csv", index=False)
+        df_pres_diab_no_farm.to_csv(
+            f"{DELTA_ETA_PATH}/df_pres_diab_no_farm_delta.csv", index=False
+        )
         print(f"{DELTA_ETA_PATH}/df_pres_diab_no_farm_delta.csv exported")
 
-        df_pres_no_diab.to_csv(f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv", index=False)
+        df_pres_no_diab.to_csv(
+            f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv", index=False
+        )
         print(f"{DELTA_ETA_PATH}/df_pres_no_diab_delta.csv exported")
 
     if DELTA_VANILLA_LSTM:
         if not LOAD_DELTA_VANILLA_DF:
-            vanilla_df = Vanilla_LSTM.create_dataset(df_anagrafica, df_diagnosi, df_esami_lab_par, df_esami_lab_par_cal, df_esami_stru, df_pres_diab_farm, df_pres_diab_no_farm, df_pres_no_diab, delta=True) 
+            vanilla_df = Vanilla_LSTM.create_dataset(
+                df_anagrafica,
+                df_diagnosi,
+                df_esami_lab_par,
+                df_esami_lab_par_cal,
+                df_esami_stru,
+                df_pres_diab_farm,
+                df_pres_diab_no_farm,
+                df_pres_no_diab,
+                delta=True,
+            )
             if SAVE_DELTA_VANILLA_DF:
                 vanilla_df.to_csv(f"{DELTA_LSTM_DF}/vanilla_df_d.csv", index=False)
                 print(f"vanilla_df.csv exported")
         else:
             print("loading vanilla data")
-            vanilla_df= read_csv("{DELTA_LSTM_DF}/vanilla_df_d.csv")
+            vanilla_df = read_csv("{DELTA_LSTM_DF}/vanilla_df_d.csv")
             vanilla_df = vanilla_df.fillna(-100)
         if DROP_ANNI:
-            vanilla_df = vanilla_df.drop(columns=["annonascita", "delta_annoprimoaccesso", "delta_decesso", "delta_annodiagnosidiabete"])
+            vanilla_df = vanilla_df.drop(
+                columns=[
+                    "annonascita",
+                    "delta_annoprimoaccesso",
+                    "delta_decesso",
+                    "delta_annodiagnosidiabete",
+                ]
+            )
 
-        len_input = len(vanilla_df.columns)-3
-        vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(input_size=len_input, hidden_size=512)
+        len_input = len(vanilla_df.columns) - 3
+        vanilla_model = Vanilla_LSTM.LightingVanillaLSTM(
+            input_size=len_input, hidden_size=512
+        )
         grouped_vanilla = vanilla_df.groupby(["idana", "idcentro"], group_keys=True)
         inputs = []
         labels = []
@@ -1510,16 +1645,16 @@ if DELTA_ETA:
                 max_history_len = group.values.shape[0]
 
         k = 2
-        while k*2 < max_history_len:
-            k = k*2
+        while k * 2 < max_history_len:
+            k = k * 2
         altrocount = 0
         print("k max history len: ", k)
         for name, group in grouped_vanilla:
             vanilla_patient_hystory = group.sort_values(by=["delta_data"])
-            labels.append(
-                vanilla_patient_hystory["label"].values[0]
-                )
-            vanilla_patient_hystory = vanilla_patient_hystory.drop(columns=["idana", "idcentro", "label"])
+            labels.append(vanilla_patient_hystory["label"].values[0])
+            vanilla_patient_hystory = vanilla_patient_hystory.drop(
+                columns=["idana", "idcentro", "label"]
+            )
 
             if vanilla_patient_hystory.values.shape[0] > k:
                 altrocount += 1
@@ -1527,7 +1662,7 @@ if DELTA_ETA:
             else:
                 inputs.append(vanilla_patient_hystory.values)
             count += 1
-            progressBar(count,len(grouped_vanilla))
+            progressBar(count, len(grouped_vanilla))
             continue
             if count >= 50:
                 break
@@ -1535,13 +1670,16 @@ if DELTA_ETA:
         from torch.nn.utils.rnn import pad_sequence
 
         tensor_list = [
-            torch.cat((torch.zeros(
-                max_history_len - len(sublist),len_input) - 200.0,
-                torch.tensor(sublist)))
+            torch.cat(
+                (
+                    torch.zeros(max_history_len - len(sublist), len_input) - 200.0,
+                    torch.tensor(sublist),
+                )
+            )
             for sublist in inputs
-            ]
-        padded_tensor = pad_sequence(tensor_list, batch_first = True) #batch_first=True
-        #padded_tensor = padded_tensor.to(torch.long)
+        ]
+        padded_tensor = pad_sequence(tensor_list, batch_first=True)  # batch_first=True
+        # padded_tensor = padded_tensor.to(torch.long)
         padded_tensor = padded_tensor.to(torch.float32)
         bool_tensor = torch.tensor(labels, dtype=torch.bool)
         bool_tensor = torch.tensor(labels, dtype=torch.float32)
@@ -1557,19 +1695,38 @@ if DELTA_ETA:
         test_size = len(vanilla_dataset) - train_size - val_size
 
         # Split the dataset into train, validation, and test sets
-        vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(vanilla_dataset, [train_size, test_size, val_size])
+        vanilla_train_dataset, vanilla_test_dataset, vanilla_val_dataset = random_split(
+            vanilla_dataset, [train_size, test_size, val_size]
+        )
 
         # Create DataLoader instances for train, validation, and test sets
         batch_size = 16  # Adjust as needed
-        train_loader = DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
-        val_loader = DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
-        test_loader = DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
+        train_loader = DataLoader(
+            vanilla_train_dataset, batch_size=batch_size, shuffle=True
+        )
+        val_loader = DataLoader(
+            vanilla_val_dataset, batch_size=batch_size, shuffle=True
+        )
+        test_loader = DataLoader(
+            vanilla_test_dataset, batch_size=batch_size, shuffle=True
+        )
 
-        vanilla_train_loader = Vanilla_LSTM.DataLoader(vanilla_train_dataset, batch_size=batch_size, shuffle=True)
-        vanilla_val_loader = Vanilla_LSTM.DataLoader(vanilla_val_dataset, batch_size=batch_size, shuffle=True)
-        vanilla_test_loader = Vanilla_LSTM.DataLoader(vanilla_test_dataset, batch_size=batch_size, shuffle=True)
-        Vanilla_LSTM.evaluate_vanilla_LSTM(vanilla_model, train=vanilla_train_dataset, test=vanilla_test_dataset, val=vanilla_val_loader)
-        torch.save(vanilla_model.state_dict(), 'delta_vanilla_lstm')
+        vanilla_train_loader = Vanilla_LSTM.DataLoader(
+            vanilla_train_dataset, batch_size=batch_size, shuffle=True
+        )
+        vanilla_val_loader = Vanilla_LSTM.DataLoader(
+            vanilla_val_dataset, batch_size=batch_size, shuffle=True
+        )
+        vanilla_test_loader = Vanilla_LSTM.DataLoader(
+            vanilla_test_dataset, batch_size=batch_size, shuffle=True
+        )
+        Vanilla_LSTM.evaluate_vanilla_LSTM(
+            vanilla_model,
+            train=vanilla_train_dataset,
+            test=vanilla_test_dataset,
+            val=vanilla_val_loader,
+        )
+        torch.save(vanilla_model.state_dict(), "delta_vanilla_lstm")
 
 
 ############################

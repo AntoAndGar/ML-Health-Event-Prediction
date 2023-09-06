@@ -1251,5 +1251,5 @@ if WRITE_CSV:
 
     for i, (df_name, df) in enumerate(dict_file_names.items()):
         df.to_csv(f"{WRITE_DATA_PATH}/{df_name}.csv", index=False)
-        print(f"{df_name}.csv exported ({i}/{len(dict_file_names)})")
+        print(f"{df_name}.csv exported ({i+1}/{len(dict_file_names)})")
     print("Exporting completed!")
