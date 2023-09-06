@@ -140,23 +140,18 @@ final_df["label"] = final_df["label"].replace([False, True], [0.0, 1.0])
 # And we replace all the remaining NaN values with the value -100 in order to be ignored by the model
 final_df = final_df.fillna(-100)
 
-# Reordering feature labels
-final_df = final_df.reindex(columns=["sesso", "annodiagnosidiabete", "annoprimoaccesso", "annodecesso", "data", 
-                                     "codiceamd", "valore", "codicestitch", "codiceatc", "quantita", "idpasto",
-                                     "descrizionefarmaco", "label"])
+# Then we construct the TensorDataset object
+data = final_df.drop("label", axis=1).values
+labels = final_df["label"].values
 
-data = final_df.drop('label',axis=1).values
-labels = final_df['label'].values
-
-# Create tensor dataset
-dataset = TensorDataset(torch.FloatTensor(data),torch.LongTensor(labels))
+tensor_dataset = TensorDataset(torch.FloatTensor(data),torch.LongTensor(labels))
 
 # Split between train and test dataset
 train_size = 0.8
 test_size = 0.2
 batch_size = 4
 
-train_dataset, test_dataset = random_split(dataset, [train_size, test_size])
+train_dataset, test_dataset = random_split(tensor_dataset, [train_size, test_size])
 
 data_loader = DataLoader(train_dataset, batch_size)
 
@@ -195,6 +190,6 @@ def train(num_epochs, data_loader, device, criterion, optimizer):
 
             if (i+1) % 10 == 0:
                 print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
-                    .format(epoch+1, num_epochs, i+1, len(dataset)//4, loss.item()))
+                    .format(epoch+1, num_epochs, i+1, len(data_loader)//4, loss.item()))
                 
 train(num_epochs, data_loader, device, criterion, optimizer)
