@@ -61,9 +61,9 @@ TRAIN_TLSTM: bool = False
 EVALUATE_TLSTM: bool = False
 
 # VANILLA LSTM PARAMETERS
-VANILLA_LSTM: bool = False
+VANILLA_LSTM: bool = True
 LOAD_VANILLA_DF: bool = False
-SAVE_VANILLA_DF: bool = True
+SAVE_VANILLA_DF: bool = False
 DROP_ANNI: bool = True
 LSTM_DF = "lstm_df"
 
@@ -73,12 +73,12 @@ LOAD_TIME_DF: bool = True
 SAVE_TIME_DF: bool = False
 
 # DELTA_ETA PARAMETERS
-DELTA_ETA: bool = True
+DELTA_ETA: bool = False
 WRITE_DELTA_ETA_DF: bool = False
 DELTA_ETA_PATH = "delta_eta_df"
 
 # DELTA VANILLA LSTM PARAMETERS
-DELTA_VANILLA_LSTM: bool = True
+DELTA_VANILLA_LSTM: bool = False
 LOAD_DELTA_VANILLA_DF: bool = False
 SAVE_DELTA_VANILLA_DF: bool = True
 DELTA_LSTM_DF = "lstm_df"
@@ -469,6 +469,15 @@ elif BALANCING == "standard":
         df_pres_no_diab = balance(df_pres_no_diab, 0.50)
         print("After balance: ", len(df_pres_no_diab))
 
+import sys,time,random
+def progressBar(count_value, total, suffix=''):
+    bar_length = 100
+    filled_up_Length = int(round(bar_length* count_value / float(total)))
+    percentage = round(100.0 * count_value/float(total),1)
+    bar = '=' * filled_up_Length + '-' * (bar_length - filled_up_Length)
+    sys.stdout.write('[%s] %s%s ...%s\r' %(bar, percentage, '%', suffix))
+    sys.stdout.flush()
+    
 van_val = 0.1
 van_test = 0.3
 van_train = 1 - van_test - van_val
@@ -529,8 +538,10 @@ if VANILLA_LSTM:
             inputs.append(vanilla_patient_hystory.values[k:])
         else:
             inputs.append(vanilla_patient_hystory.values)
-        continue
         count += 1
+        progressBar(count,len(grouped_vanilla))
+        continue
+
         if count >= 50:
             break
     print("altrocount: ", altrocount)
@@ -588,6 +599,10 @@ if VANILLA_LSTM:
         test=vanilla_test_dataset,
         val=vanilla_val_loader,
     )
+    torch.save(
+        vanilla_model.state_dict(), 'vanilla_lstm'
+    )
+
 #####################
 # PubMedBERT
 #####################
@@ -1375,16 +1390,7 @@ if EVALUATE_BERT:
     evaluate_PubMedBERT()
 
 
-
-import sys,time,random
-def progressBar(count_value, total, suffix=''):
-    bar_length = 100
-    filled_up_Length = int(round(bar_length* count_value / float(total)))
-    percentage = round(100.0 * count_value/float(total),1)
-    bar = '=' * filled_up_Length + '-' * (bar_length - filled_up_Length)
-    sys.stdout.write('[%s] %s%s ...%s\r' %(bar, percentage, '%', suffix))
-    sys.stdout.flush()
-
+'''
 if TIME_LSTM:
     if LOAD_TIME_DF:
         tlsmt_df = read_csv(f"{LSTM_DF}/vanilla_df.csv")
@@ -1400,12 +1406,11 @@ if TIME_LSTM:
             df_pres_diab_no_farm,
             df_pres_no_diab,
         )
-        if SAVE_TIME_DF:
-            tlsmt_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
-            print(f"vanilla_df.csv exported")
+    if SAVE_TIME_DF:
+        tlsmt_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
+        print(f"vanilla_df.csv exported")
     vanilla_df["data"] = vanilla_df["data"].astype(str).replace({"-": ""}, regex=True)
-
-
+'''
 #####################
 # Delta-Eta
 #####################
