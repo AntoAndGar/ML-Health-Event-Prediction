@@ -11,10 +11,16 @@ class Model(torch.nn.Module):
         self.fc = torch.nn.Linear(hidden_size, num_classes)
     
     def forward(self, x):
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).requires_grad_().to(device)
+        # Get the batch size from the input tensor
+        batch_size = x.size(0)
+        
+        # Initialize the hidden state with correct dimensions
+        h0 = torch.zeros(self.num_layers, self.hidden_size).requires_grad_().to(device)
 
+        # Pass input through the GRU
         out, _ = self.gru(x, h0)
 
-        out = self.fc(out[:, -1, :])
+        # Extract the output at the last time step
+        out = self.fc(out[:, :])
 
         return out

@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import re
 import torch
+import optuna
+
 
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
@@ -88,8 +90,7 @@ all_events_concat = pd.concat(
 )
 
 final_df = df_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
-
-final_df = final_df[:100]
+final_df = final_df[:5000]
 
 # First we delete "idana" and "idcentro" as they don't give informations to the model
 final_df = final_df.drop(columns=["idana", "idcentro"])
@@ -158,22 +159,24 @@ data_loader = DataLoader(train_dataset, batch_size)
 # Training step
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-input_size = 13
+input_size = 12
 hidden_size = 32
 num_layers = 1
 num_classes = 2
 
-model = model.Model(input_size, hidden_size, num_layers, num_classes)
+my_model = model.Model(input_size, hidden_size, num_layers, num_classes)
 
 criterion = torch.nn.CrossEntropyLoss()
 
 learning_rate = 0.1
 
-optimizer = torch.optim.Adam(model.parameters(), learning_rate)
+optimizer = torch.optim.Adam(my_model.parameters(), learning_rate)
 
 num_epochs = 1
 
-def train(num_epochs, data_loader, device, criterion, optimizer):
+test_dataloader = DataLoader(test_dataset, batch_size)
+
+def train(model, num_epochs, data_loader, device, criterion, optimizer):
     for epoch in range(num_epochs):
         for i, (inputs, labels) in enumerate(data_loader):
             inputs = inputs.to(device)
@@ -188,8 +191,65 @@ def train(num_epochs, data_loader, device, criterion, optimizer):
 
             optimizer.step()
 
-            if (i+1) % 10 == 0:
+            if (i+1) % 500 == 0:
                 print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
-                    .format(epoch+1, num_epochs, i+1, len(data_loader)//4, loss.item()))
+                    .format(epoch+1, num_epochs, (i+1)//4, len(data_loader)//4, loss.item()))
                 
-train(num_epochs, data_loader, device, criterion, optimizer)
+train(my_model, num_epochs, data_loader, device, criterion, optimizer)
+
+
+
+def evaluate(my_model, test_dataloader):
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for inputs, labels in test_dataloader:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = my_model(inputs)
+
+            _, predicted = torch.max(outputs.data, 1)
+
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    return correct / total
+
+print('Accuracy of the model on the test set: {:.2f}%'.format(100 * evaluate(my_model, test_dataloader)))
+
+def objective(trial):
+
+    gru_num_layers = trial.suggest_int("gru_num_layers", 1, 3)
+    gru_hidden_size = trial.suggest_int("gru_hidden_size", 16, 32, log=True)
+    
+    net = model.Model(
+			input_size=input_size,
+            hidden_size=gru_hidden_size,
+            num_layers=gru_num_layers,
+            num_classes=2
+		)
+    
+    n_epochs = trial.suggest_int("n_epochs", 5, 20, step=5)
+    learning_rate = trial.suggest_float("learning_rate", 1e-5, 1e-2, log=True)
+
+    train(
+		net,
+		n_epochs,
+		data_loader,
+		device,
+		torch.nn.CrossEntropyLoss(),
+        torch.optim.Adam(net.parameters(), learning_rate),
+	)
+
+    accuracy = evaluate(net, test_dataloader)
+
+    return -accuracy
+
+print('Accuracy without bayesian optimization {:.2f}%'.format(100 * evaluate(my_model, test_dataloader)))
+study = optuna.create_study(study_name="Bayesian optimization")
+study.optimize(objective, n_trials=50)
+print("Best accuracy: ", -study.best_value)
+print("Best hyperparameters", study.best_params)
+
