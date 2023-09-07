@@ -189,6 +189,7 @@ NUM_CLASSES = 2
 
 
 def train(model, num_epochs, data_loader, device, criterion, optimizer, batch_size):
+    model.train()
     for epoch in range(num_epochs):
         for i, (inputs, labels) in enumerate(data_loader):
             inputs = inputs.to(device)
@@ -208,8 +209,8 @@ def train(model, num_epochs, data_loader, device, criterion, optimizer, batch_si
                     "Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}".format(
                         epoch + 1,
                         num_epochs,
-                        (i) // batch_size,
-                        len(data_loader) // batch_size,
+                        i + 1,
+                        len(data_loader),
                         loss.item(),
                     )
                 )
@@ -218,7 +219,7 @@ def train(model, num_epochs, data_loader, device, criterion, optimizer, batch_si
 def evaluate(my_model, test_dataloader):
     correct = 0
     total = 0
-
+    my_model.eval()
     with torch.no_grad():
         for inputs, labels in test_dataloader:
             inputs = inputs.to(device)
@@ -235,13 +236,13 @@ def evaluate(my_model, test_dataloader):
 
 
 def objective(trial):
-    batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
+    batch_size = trial.suggest_categorical("batch_size", [128, 256])
     train_data_loader = DataLoader(
         train_dataset, batch_size, num_workers=8, shuffle=True
     )
     test_dataloader = DataLoader(test_dataset, batch_size, num_workers=4, shuffle=False)
-    gru_num_layers = trial.suggest_int("gru_num_layers", 1, 3)
-    gru_hidden_size = trial.suggest_categorical("gru_hidden_size", [16, 32, 64, 128])
+    gru_num_layers = trial.suggest_int("gru_num_layers", 1, 2)
+    gru_hidden_size = trial.suggest_categorical("gru_hidden_size", [16, 32, 64])
 
     net = model.Model(
         input_size=INPUT_SIZE,
@@ -251,7 +252,7 @@ def objective(trial):
     ).to(device)
 
     n_epochs = trial.suggest_int("n_epochs", 5, 15, step=5)
-    learning_rate = trial.suggest_float("learning_rate", 1e-4, 7e-3, log=True)
+    learning_rate = trial.suggest_float("learning_rate", 5e-5, 7e-3, log=True)
     criterion = torch.nn.CrossEntropyLoss().to(device)
     optimizer = torch.optim.Adam(net.parameters(), learning_rate)
 
@@ -271,6 +272,6 @@ def objective(trial):
 
 
 study = optuna.create_study(study_name="Bayesian optimization", direction="maximize")
-study.optimize(objective, n_trials=50)
+study.optimize(objective, n_trials=10)
 print("Best accuracy: ", study.best_value)
 print("Best hyperparameters", study.best_params)
