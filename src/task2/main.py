@@ -44,6 +44,7 @@ SEED = 0
 rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
 seed_everything(SEED, workers=True)
+torch.manual_seed(SEED)
 MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -489,14 +490,17 @@ elif BALANCING == "standard":
             print(f"{df_name}.csv exported ({i+1}/{len(dict_file_names)})")
         print("Exporting completed!")
 
-import sys,time,random
-def progressBar(count_value, total, suffix=''):
+import sys, time, random
+
+
+def progressBar(count_value, total, suffix=""):
     bar_length = 100
-    filled_up_Length = int(round(bar_length* count_value / float(total)))
-    percentage = round(100.0 * count_value/float(total),1)
-    bar = '=' * filled_up_Length + '-' * (bar_length - filled_up_Length)
-    sys.stdout.write('[%s] %s%s ...%s\r' %(bar, percentage, '%', suffix))
+    filled_up_Length = int(round(bar_length * count_value / float(total)))
+    percentage = round(100.0 * count_value / float(total), 1)
+    bar = "=" * filled_up_Length + "-" * (bar_length - filled_up_Length)
+    sys.stdout.write("[%s] %s%s ...%s\r" % (bar, percentage, "%", suffix))
     sys.stdout.flush()
+
 
 van_val = 0.1
 van_test = 0.3
@@ -566,7 +570,7 @@ if VANILLA_LSTM:
         else:
             inputs.append(vanilla_patient_hystory.values)
         count += 1
-        progressBar(count,len(grouped_vanilla))
+        progressBar(count, len(grouped_vanilla))
         continue
 
         if count >= 50:
@@ -626,9 +630,7 @@ if VANILLA_LSTM:
         test=vanilla_test_dataset,
         val=vanilla_val_loader,
     )
-    torch.save(
-        vanilla_model.state_dict(), 'vanilla_lstm'
-    )
+    torch.save(vanilla_model.state_dict(), "vanilla_lstm")
 
 #####################
 # PubMedBERT
@@ -1420,7 +1422,7 @@ if EVALUATE_BERT:
     evaluate_PubMedBERT()
 
 
-'''
+"""
 if TIME_LSTM:
     if LOAD_TIME_DF:
         tlsmt_df = read_csv(f"{LSTM_DF}/vanilla_df.csv")
@@ -1440,7 +1442,7 @@ if TIME_LSTM:
         tlsmt_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
         print(f"vanilla_df.csv exported")
     vanilla_df["data"] = vanilla_df["data"].astype(str).replace({"-": ""}, regex=True)
-'''
+"""
 #####################
 # Delta-Eta
 #####################
