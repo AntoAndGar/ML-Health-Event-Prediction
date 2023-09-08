@@ -370,6 +370,6 @@ train_data_loader = DataLoader(
     train_dataset, 16, shuffle=False
 )
 study = optuna.create_study(study_name="Bayesian optimization", direction="maximize")
-study.optimize(objective, n_trials=1)
+study.optimize(objective, n_trials=20)
 print("Best accuracy: ", study.best_value)
 print("Best hyperparameters", study.best_params)
