@@ -105,20 +105,23 @@ train_size = 0.8
 test_size = 0.2
 # Creating a dataframe with 50%
 # values of original dataframe
-#df_anagrafica = df_anagrafica[:500]
 
-#df_anagrafica = df_anagrafica[:2000]
+##########################
+### creating test dataset
+##########################
 
-test_anagrafica = df_anagrafica.sample(frac = test_size, random_state=2)
- 
+test_anagrafica = df_anagrafica.sample(frac=test_size, random_state=2)
+
 # Creating dataframe with
 # rest of the 50% values
 train_anagrafica = df_anagrafica.drop(test_anagrafica.index)
 
-final_df = test_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
+final_df = test_anagrafica.merge(
+    all_events_concat, on=["idana", "idcentro"], how="inner"
+)
 
 # First we delete "idana" and "idcentro" as they don't give informations to the model
-#final_df = final_df.drop(columns=["idana", "idcentro"])
+# final_df = final_df.drop(columns=["idana", "idcentro"])
 
 # Here we convert feature "sesso" into numeric feature
 final_df["sesso"] = final_df["sesso"].replace(["M", "F"], [0.0, 1.0])
@@ -179,22 +182,25 @@ final_df["label"] = final_df["label"].replace([False, True], [0.0, 1.0])
 # And we replace all the remaining NaN values with the value -100 in order to be ignored by the model
 final_df = final_df.fillna(-100)
 
-final_df = final_df.sort_values(by=['idana', 'idcentro', 'data'])
+final_df = final_df.sort_values(by=["idana", "idcentro", "data"])
 final_df = final_df.drop(columns=["idana", "idcentro"])
 # Then we construct the TensorDataset object
 data = final_df.drop("label", axis=1).values
 labels = final_df["label"].values
 
-print("Created dataset")
+test_dataset = TensorDataset(torch.FloatTensor(data), torch.LongTensor(labels))
+print("Created test dataset")
 
-tensor_dataset = TensorDataset(torch.FloatTensor(data), torch.LongTensor(labels))
+##########################
+### creating train dataset
+##########################
 
-test_dataset = tensor_dataset 
-
-final_df = train_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
+final_df = train_anagrafica.merge(
+    all_events_concat, on=["idana", "idcentro"], how="inner"
+)
 
 # First we delete "idana" and "idcentro" as they don't give informations to the model
-#final_df = final_df.drop(columns=["idana", "idcentro"])
+# final_df = final_df.drop(columns=["idana", "idcentro"])
 
 # Here we convert feature "sesso" into numeric feature
 final_df["sesso"] = final_df["sesso"].replace(["M", "F"], [0.0, 1.0])
@@ -255,20 +261,15 @@ final_df["label"] = final_df["label"].replace([False, True], [0.0, 1.0])
 # And we replace all the remaining NaN values with the value -100 in order to be ignored by the model
 final_df = final_df.fillna(-100)
 
-final_df = final_df.sort_values(by=['idana', 'idcentro', 'data'])
+final_df = final_df.sort_values(by=["idana", "idcentro", "data"])
 final_df = final_df.drop(columns=["idana", "idcentro"])
 
 # Then we construct the TensorDataset object
 data = final_df.drop("label", axis=1).values
 labels = final_df["label"].values
 
-print("Created dataset")
-
-tensor_dataset = TensorDataset(torch.FloatTensor(data), torch.LongTensor(labels))
-
-train_dataset = tensor_dataset 
-
-#train_dataset, test_dataset = random_split(tensor_dataset, [train_size, test_size])
+train_dataset = TensorDataset(torch.FloatTensor(data), torch.LongTensor(labels))
+print("Created train dataset")
 
 # Training step
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -359,16 +360,7 @@ def objective(trial):
 
     return accuracy
 
-model = model.Model(
-        input_size=INPUT_SIZE, 
-        hidden_size=32,
-        num_layers=1,
-        num_classes=NUM_CLASSES,
-    ).to(device)
 
-train_data_loader = DataLoader(
-    train_dataset, 16, shuffle=False
-)
 study = optuna.create_study(study_name="Bayesian optimization", direction="maximize")
 study.optimize(objective, n_trials=20)
 print("Best accuracy: ", study.best_value)

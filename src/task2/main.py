@@ -8,6 +8,7 @@ import os
 import re
 import torch
 import random
+import sys
 
 import Vanilla_LSTM
 
@@ -40,6 +41,7 @@ import tensorflow as tf
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import roc_auc_score
 
+
 SEED = 0
 rng = np.random.default_rng(SEED)
 GEN_SEED = torch.Generator().manual_seed(SEED)
@@ -67,11 +69,6 @@ LOAD_VANILLA_DF: bool = False
 SAVE_VANILLA_DF: bool = False
 DROP_ANNI: bool = True
 LSTM_DF = "lstm_df"
-
-# TIME LSTM PARAMETERS
-TIME_LSTM: bool = False
-LOAD_TIME_DF: bool = True
-SAVE_TIME_DF: bool = False
 
 # DELTA_ETA PARAMETERS
 DELTA_ETA: bool = False
@@ -249,23 +246,6 @@ def drop_last_six_months(df: pd.DataFrame) -> pd.DataFrame:
     temp = df_label_0_last_event["data_left"] >= (
         df_label_0_last_event["data_right"] - np.timedelta64(6, "M")
     )
-
-    """
-    df = (
-        df_label_0_last_event[temp]
-        .drop(columns=["data_right",
-                        "sesso",
-                        "annodiagnosidiabete",
-                        "label",
-                        "scolarita",
-                        "statocivile",
-                        "professione",
-                        "annonascita",
-                        "annoprimoaccesso",
-                        "annodecesso"])
-        .rename(columns={"data_left": "data"})
-    )
-    """
     df = df.drop(temp[temp].index)
     return df
 
@@ -357,12 +337,8 @@ if BALANCING == "lossy":
     )
 
 elif BALANCING == "standard":
-    # TODO: check if this is correct, because to me it seems silly that we have
-    # to modify values with labels 1 to make them 0, at the end the model
-    # will be confused by this
     duplication_factor = int(len(df_anagrafica_label_0) / len(df_anagrafica_label_1))
-    # here the duplication factor is -1 because 1 time is already present in the original df
-    # at which we append the duplicated df
+
     duplicated_df_anagrafica_label_1 = pd.concat(
         [df_anagrafica_label_1] * duplication_factor,
         ignore_index=True,
@@ -426,12 +402,6 @@ elif BALANCING == "standard":
         duplicated_df_anagrafica_label_1["duplicated"]
     ]
 
-    # Yes you can fix this if yoiu prefer but to me the code is unreadable to do so
-    # FIXME: A value is trying to be set on a copy of a slice from a DataFrame.
-    #       Try using .loc[row_indexer,col_indexer] = value instead
-    #
-    #       See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
-    #       new_dup_record["idana"] = -(
     new_dup_record["idana"] = -(
         new_dup_record["idana"].astype("int")
         + 100000 * new_dup_record["duplicate_identifier"].astype("int")
@@ -490,8 +460,6 @@ elif BALANCING == "standard":
             print(f"{df_name}.csv exported ({i+1}/{len(dict_file_names)})")
         print("Exporting completed!")
 
-import sys, time, random
-
 
 def progressBar(count_value, total, suffix=""):
     bar_length = 100
@@ -505,7 +473,6 @@ def progressBar(count_value, total, suffix=""):
 van_val = 0.1
 van_test = 0.3
 van_train = 1 - van_test - van_val
-# TODO: Converti datatime in float
 if VANILLA_LSTM:
     if not LOAD_VANILLA_DF:
         vanilla_df = Vanilla_LSTM.create_dataset(
@@ -571,10 +538,7 @@ if VANILLA_LSTM:
             inputs.append(vanilla_patient_hystory.values)
         count += 1
         progressBar(count, len(grouped_vanilla))
-        continue
 
-        if count >= 50:
-            break
     print("altrocount: ", altrocount)
 
     tensor_list = [
@@ -1183,8 +1147,6 @@ class PubMedBERTTransformer(LightningModule):
 
 def evaluate_PubMedBERT():
     dm = PubMedBERTDataModule(tuple_dataset, MODEL_NAME)
-    # dm.setup("fit")
-    # print(next(iter(dm.train_dataloader())))
 
     model = PubMedBERTTransformer(
         model_name_or_path=MODEL_NAME,
@@ -1391,7 +1353,6 @@ def evaluate_T_LSTM():
             training_mode,
         )
 
-    # TODO: fix this because overlapping train and test data
     len_val_batch = 63
     num_val_batch = len(feature) // len_val_batch
     num_batch_to_select = 300
@@ -1421,28 +1382,6 @@ if EVALUATE_TLSTM:
 if EVALUATE_BERT:
     evaluate_PubMedBERT()
 
-
-"""
-if TIME_LSTM:
-    if LOAD_TIME_DF:
-        tlsmt_df = read_csv(f"{LSTM_DF}/vanilla_df.csv")
-        tlsmt_df = tlsmt_df.fillna(-100)
-    else:
-        vanilla_df = Vanilla_LSTM.create_dataset(
-            df_anagrafica,
-            df_diagnosi,
-            df_esami_lab_par,
-            df_esami_lab_par_cal,
-            df_esami_stru,
-            df_pres_diab_farm,
-            df_pres_diab_no_farm,
-            df_pres_no_diab,
-        )
-    if SAVE_TIME_DF:
-        tlsmt_df.to_csv(f"{LSTM_DF}/vanilla_df.csv", index=False)
-        print(f"vanilla_df.csv exported")
-    vanilla_df["data"] = vanilla_df["data"].astype(str).replace({"-": ""}, regex=True)
-"""
 #####################
 # Delta-Eta
 #####################
@@ -1665,11 +1604,7 @@ if DELTA_ETA:
                 inputs.append(vanilla_patient_hystory.values)
             count += 1
             progressBar(count, len(grouped_vanilla))
-            continue
-            if count >= 50:
-                break
         print("altrocount: ", altrocount)
-        from torch.nn.utils.rnn import pad_sequence
 
         tensor_list = [
             torch.cat(
@@ -1729,14 +1664,3 @@ if DELTA_ETA:
             val=vanilla_val_loader,
         )
         torch.save(vanilla_model.state_dict(), "delta_vanilla_lstm")
-
-
-############################
-### Advanced Unbalancing ###
-############################
-
-# Source https://github.com/bardhprenkaj/ML_labs/blob/main/src/lab1/Data_Feature_preprocessing.ipynb
-
-#####################
-# SMOTE
-#####################
