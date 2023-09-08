@@ -100,11 +100,25 @@ all_events_concat = pd.concat(
         df_pres_diab_no_farm,
     )
 )
+# Split between train and test dataset
+train_size = 0.8
+test_size = 0.2
+# Creating a dataframe with 50%
+# values of original dataframe
+#df_anagrafica = df_anagrafica[:500]
 
-final_df = df_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
+#df_anagrafica = df_anagrafica[:2000]
+
+test_anagrafica = df_anagrafica.sample(frac = test_size, random_state=2)
+ 
+# Creating dataframe with
+# rest of the 50% values
+train_anagrafica = df_anagrafica.drop(test_anagrafica.index)
+
+final_df = test_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
 
 # First we delete "idana" and "idcentro" as they don't give informations to the model
-final_df = final_df.drop(columns=["idana", "idcentro"])
+#final_df = final_df.drop(columns=["idana", "idcentro"])
 
 # Here we convert feature "sesso" into numeric feature
 final_df["sesso"] = final_df["sesso"].replace(["M", "F"], [0.0, 1.0])
@@ -165,6 +179,8 @@ final_df["label"] = final_df["label"].replace([False, True], [0.0, 1.0])
 # And we replace all the remaining NaN values with the value -100 in order to be ignored by the model
 final_df = final_df.fillna(-100)
 
+final_df = final_df.sort_values(by=['idana', 'idcentro', 'data'])
+final_df = final_df.drop(columns=["idana", "idcentro"])
 # Then we construct the TensorDataset object
 data = final_df.drop("label", axis=1).values
 labels = final_df["label"].values
@@ -173,16 +189,90 @@ print("Created dataset")
 
 tensor_dataset = TensorDataset(torch.FloatTensor(data), torch.LongTensor(labels))
 
-# Split between train and test dataset
-train_size = 0.8
-test_size = 0.2
+test_dataset = tensor_dataset 
 
-train_dataset, test_dataset = random_split(tensor_dataset, [train_size, test_size])
+final_df = train_anagrafica.merge(all_events_concat, on=["idana", "idcentro"], how="inner")
+
+# First we delete "idana" and "idcentro" as they don't give informations to the model
+#final_df = final_df.drop(columns=["idana", "idcentro"])
+
+# Here we convert feature "sesso" into numeric feature
+final_df["sesso"] = final_df["sesso"].replace(["M", "F"], [0.0, 1.0])
+
+# Now we want to convert every date into a numeric progressive value
+# We chose them as the number of months that have passed from the birth
+final_df["annonascita"] = pd.to_datetime(final_df["annonascita"], format="%Y-%m-%d")
+final_df["annodiagnosidiabete"] = pd.to_datetime(
+    final_df["annodiagnosidiabete"], format="%Y-%m-%d"
+)
+final_df["annoprimoaccesso"] = pd.to_datetime(
+    final_df["annoprimoaccesso"], format="%Y-%m-%d"
+)
+final_df["annodecesso"] = pd.to_datetime(final_df["annodecesso"], format="%Y-%m-%d")
+final_df["data"] = pd.to_datetime(final_df["data"], format="%Y-%m-%d")
+
+final_df["annodiagnosidiabete"] = (
+    final_df["annodiagnosidiabete"] - final_df["annonascita"]
+) / pd.Timedelta(days=31)
+final_df["annoprimoaccesso"] = (
+    final_df["annoprimoaccesso"] - final_df["annonascita"]
+) / pd.Timedelta(days=31)
+final_df["annodecesso"] = (
+    final_df["annodecesso"] - final_df["annonascita"]
+) / pd.Timedelta(days=31)
+final_df["data"] = (final_df["data"] - final_df["annonascita"]) / pd.Timedelta(days=31)
+
+# We delete the date of the birth since would be zero for all records
+# We also delete columns scolarita, statocivile and professione since they have a percentage of NaN values above 50%
+# We delete also the column "descrizionefarmaco" since it is a description of the drug and it is very resource expensive to utilize it
+final_df = final_df.drop(
+    columns=[
+        "annonascita",
+        "scolarita",
+        "statocivile",
+        "professione",
+        "descrizionefarmaco",
+    ]
+)
+
+# Now we substitute all categorical feature into a numeric one
+final_df["codiceamd"] = pd.Categorical(final_df["codiceamd"]).codes.astype(float)
+final_df["codiceamd"] = final_df["codiceamd"].replace(-1.0, np.nan)
+
+final_df["valore"] = pd.Categorical(final_df["valore"]).codes.astype(float)
+final_df["valore"] = final_df["valore"].replace(-1.0, np.nan)
+
+final_df["codicestitch"] = pd.Categorical(final_df["codicestitch"]).codes.astype(float)
+final_df["codicestitch"] = final_df["codicestitch"].replace(-1.0, np.nan)
+
+# final_df["descrizionefarmaco"] = pd.Categorical(final_df["descrizionefarmaco"]).codes.astype(float)
+# final_df["descrizionefarmaco"] = final_df["descrizionefarmaco"].replace(-1.0, np.nan)
+
+
+# We convert boolean label into numeric value
+final_df["label"] = final_df["label"].replace([False, True], [0.0, 1.0])
+
+# And we replace all the remaining NaN values with the value -100 in order to be ignored by the model
+final_df = final_df.fillna(-100)
+
+final_df = final_df.sort_values(by=['idana', 'idcentro', 'data'])
+final_df = final_df.drop(columns=["idana", "idcentro"])
+
+# Then we construct the TensorDataset object
+data = final_df.drop("label", axis=1).values
+labels = final_df["label"].values
+
+print("Created dataset")
+
+tensor_dataset = TensorDataset(torch.FloatTensor(data), torch.LongTensor(labels))
+
+train_dataset = tensor_dataset 
+
+#train_dataset, test_dataset = random_split(tensor_dataset, [train_size, test_size])
 
 # Training step
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Utilizing device: ", device)
-
 
 INPUT_SIZE = 10
 NUM_CLASSES = 2
@@ -196,7 +286,6 @@ def train(model, num_epochs, data_loader, device, criterion, optimizer, batch_si
             labels = labels.to(device)
 
             optimizer.zero_grad()
-
             outputs = model(inputs)
 
             loss = criterion(outputs, labels)
@@ -238,7 +327,7 @@ def evaluate(my_model, test_dataloader):
 def objective(trial):
     batch_size = trial.suggest_categorical("batch_size", [128, 256])
     train_data_loader = DataLoader(
-        train_dataset, batch_size, num_workers=8, shuffle=True
+        train_dataset, batch_size, num_workers=8, shuffle=False
     )
     test_dataloader = DataLoader(test_dataset, batch_size, num_workers=4, shuffle=False)
     gru_num_layers = trial.suggest_int("gru_num_layers", 1, 2)
@@ -270,8 +359,17 @@ def objective(trial):
 
     return accuracy
 
+model = model.Model(
+        input_size=INPUT_SIZE, 
+        hidden_size=32,
+        num_layers=1,
+        num_classes=NUM_CLASSES,
+    ).to(device)
 
+train_data_loader = DataLoader(
+    train_dataset, 16, shuffle=False
+)
 study = optuna.create_study(study_name="Bayesian optimization", direction="maximize")
-study.optimize(objective, n_trials=10)
+study.optimize(objective, n_trials=1)
 print("Best accuracy: ", study.best_value)
 print("Best hyperparameters", study.best_params)
