@@ -53,15 +53,15 @@ os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 READ_DATA_PATH = "clean_data"
 PRESCRIZIONI: bool = True
-BERT_DATASET: bool = False
-CREATE_BERT_DATASET: bool = False
+BERT_DATASET: bool = True
+CREATE_BERT_DATASET: bool = True
 PARALLEL_LOAD_DATASET: bool = True
 WRITE_DATASET: bool = False
 DATASET_NAME = "dataset_def.pkl"
-EVALUATE_BERT: bool = False
+EVALUATE_BERT: bool = True
 
-TRAIN_TLSTM: bool = False
-EVALUATE_TLSTM: bool = False
+TRAIN_TLSTM: bool = True
+EVALUATE_TLSTM: bool = True
 
 # VANILLA LSTM PARAMETERS
 VANILLA_LSTM: bool = True
@@ -71,17 +71,17 @@ DROP_ANNI: bool = True
 LSTM_DF = "lstm_df"
 
 # DELTA_ETA PARAMETERS
-DELTA_ETA: bool = False
+DELTA_ETA: bool = True
 WRITE_DELTA_ETA_DF: bool = False
 DELTA_ETA_PATH = "delta_eta_df"
 
 # DELTA VANILLA LSTM PARAMETERS
-DELTA_VANILLA_LSTM: bool = False
+DELTA_VANILLA_LSTM: bool = True
 LOAD_DELTA_VANILLA_DF: bool = False
-SAVE_DELTA_VANILLA_DF: bool = True
+SAVE_DELTA_VANILLA_DF: bool = False
 DELTA_LSTM_DF = "lstm_df"
 
-WRITE_CSV: bool = False
+WRITE_CSV: bool = True
 WRITE_DATA_PATH = "balanced_data"
 
 BALANCING = "standard"
